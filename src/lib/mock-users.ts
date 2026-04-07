@@ -13,28 +13,39 @@ export type MockUser = {
 /** Demo directory — matches appraisal `ownerUserId`. */
 export const MOCK_USERS: MockUser[] = [
   {
-    id: "1",
-    employeeName: "Emma Nguyen",
+    id: "emma",
+    employeeName: "Emma",
     position: "Senior Analyst",
     department: "Corporate Finance",
     mLevel: 4,
-    managerName: "David Park",
+    managerName: "Mark",
     entity: "HQ Corporate Services",
   },
   {
-    id: "2",
-    employeeName: "Marcus Lee",
-    position: "Coordinator",
+    id: "mark",
+    employeeName: "Mark",
+    position: "Department Manager",
     department: "Operations",
-    mLevel: 3,
-    managerName: "Priya Shah",
-    entity: "China Campus",
+    mLevel: 6,
+    managerName: "David Park",
+    entity: "HQ Corporate Services",
   },
 ];
 
+/** Single demo manager login — reviews reports whose appraisals name them as reviewer. */
+export const DEMO_MANAGER = {
+  id: "mark",
+  displayName: "Mark",
+} as const;
+
 export type EmploymentProfile = Pick<
   Appraisal,
-  "employeeName" | "position" | "department" | "mLevel" | "managerName" | "entity"
+  | "employeeName"
+  | "position"
+  | "department"
+  | "mLevel"
+  | "managerName"
+  | "entity"
 >;
 
 export function employmentProfileFromUser(u: MockUser): EmploymentProfile {
@@ -50,4 +61,17 @@ export function employmentProfileFromUser(u: MockUser): EmploymentProfile {
 
 export function findMockUser(id: string): MockUser | undefined {
   return MOCK_USERS.find((u) => u.id === id);
+}
+
+/**
+ * When a new appraisal is created for `ownerUserId`, which manager login (if any)
+ * should get an in-app notification on submit.
+ */
+export function reviewingManagerIdForOwner(ownerUserId: string): string | null {
+  if (ownerUserId === "emma") return DEMO_MANAGER.id;
+  if (ownerUserId === "mark") return null;
+  const u = findMockUser(ownerUserId);
+  if (!u) return null;
+  if (u.managerName.toLowerCase().includes("mark")) return DEMO_MANAGER.id;
+  return null;
 }

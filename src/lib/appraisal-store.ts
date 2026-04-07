@@ -1,11 +1,30 @@
 import { promises as fs } from "fs";
 import path from "path";
+import { randomUUID } from "crypto";
 import type { Appraisal, CapabilityRow, KpiRow } from "./types";
 import { CAPABILITY_ORDER, ENTITY_OPTIONS, MAX_KPIS } from "./types";
 import { migrateAppraisal } from "./migrate-appraisal";
+import {
+  employmentProfileFromUser,
+  findMockUser,
+  reviewingManagerIdForOwner,
+} from "./mock-users";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const DATA_FILE = path.join(DATA_DIR, "appraisals.json");
+
+/** Vercel serverless has a read-only filesystem; file-based store always fails there. */
+const USE_MEMORY_STORE =
+  process.env.APPRAISAL_STORE === "memory" || process.env.VERCEL === "1";
+
+let memoryAppraisals: Appraisal[] | null = null;
+
+function getMemoryAppraisals(): Appraisal[] {
+  if (!memoryAppraisals) {
+    memoryAppraisals = [];
+  }
+  return memoryAppraisals;
+}
 
 function defaultCapabilities(): CapabilityRow[] {
   return CAPABILITY_ORDER.map((id) => ({
@@ -16,20 +35,66 @@ function defaultCapabilities(): CapabilityRow[] {
   }));
 }
 
-function emptyAppraisalSeed(
-  id: string,
-  ownerUserId: string
-): Record<string, unknown> {
-  return {
+async function ensureFile(): Promise<Appraisal[]> {
+  if (USE_MEMORY_STORE) {
+    return getMemoryAppraisals();
+  }
+
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  try {
+    const raw = await fs.readFile(DATA_FILE, "utf-8");
+    const parsed = JSON.parse(raw) as unknown[];
+    if (!Array.isArray(parsed)) {
+      const empty: Appraisal[] = [];
+      await fs.writeFile(DATA_FILE, JSON.stringify(empty, null, 2), "utf-8");
+      return empty;
+    }
+    if (parsed.length === 0) {
+      return [];
+    }
+    return parsed.map((item) => migrateAppraisal(item));
+  } catch {
+    const empty: Appraisal[] = [];
+    await fs.writeFile(DATA_FILE, JSON.stringify(empty, null, 2), "utf-8");
+    return empty;
+  }
+}
+
+export async function readAppraisals(): Promise<Appraisal[]> {
+  return ensureFile();
+}
+
+export async function getAppraisal(id: string): Promise<Appraisal | null> {
+  const list = await readAppraisals();
+  return list.find((a) => a.id === id) ?? null;
+}
+
+export async function writeAppraisals(appraisals: Appraisal[]): Promise<void> {
+  if (USE_MEMORY_STORE) {
+    memoryAppraisals = appraisals;
+    return;
+  }
+
+  await fs.mkdir(DATA_DIR, { recursive: true });
+  await fs.writeFile(DATA_FILE, JSON.stringify(appraisals, null, 2), "utf-8");
+}
+
+/** Creates a draft appraisal for a demo employee (Emma / Mark / …). */
+export async function createAppraisal(ownerUserId: string): Promise<Appraisal> {
+  const user = findMockUser(ownerUserId);
+  if (!user) {
+    throw new Error("Unknown employee");
+  }
+  const list = await readAppraisals();
+  const id = randomUUID();
+  const profile = employmentProfileFromUser(user);
+  const reviewingManagerId = reviewingManagerIdForOwner(ownerUserId);
+  const raw = {
     id,
     ownerUserId,
-    employeeName: "",
-    position: "",
-    department: "",
-    mLevel: 3,
-    managerName: "",
-    entity: ENTITY_OPTIONS[0],
-    status: "draft",
+    reviewingManagerId,
+    ...profile,
+    status: "draft" as const,
     kpis: [
       {
         goalsAndKpis: "",
@@ -44,45 +109,10 @@ function emptyAppraisalSeed(
     employeeComments: "",
     managerComments: "",
   };
-}
-
-function defaultAppraisals(): Appraisal[] {
-  return [
-    migrateAppraisal(emptyAppraisalSeed("1", "1")),
-    migrateAppraisal(emptyAppraisalSeed("2", "2")),
-  ];
-}
-
-async function ensureFile(): Promise<Appraisal[]> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  try {
-    const raw = await fs.readFile(DATA_FILE, "utf-8");
-    const parsed = JSON.parse(raw) as unknown[];
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      const seed = defaultAppraisals();
-      await fs.writeFile(DATA_FILE, JSON.stringify(seed, null, 2), "utf-8");
-      return seed;
-    }
-    return parsed.map((item) => migrateAppraisal(item));
-  } catch {
-    const seed = defaultAppraisals();
-    await fs.writeFile(DATA_FILE, JSON.stringify(seed, null, 2), "utf-8");
-    return seed;
-  }
-}
-
-export async function readAppraisals(): Promise<Appraisal[]> {
-  return ensureFile();
-}
-
-export async function getAppraisal(id: string): Promise<Appraisal | null> {
-  const list = await readAppraisals();
-  return list.find((a) => a.id === id) ?? null;
-}
-
-export async function writeAppraisals(appraisals: Appraisal[]): Promise<void> {
-  await fs.mkdir(DATA_DIR, { recursive: true });
-  await fs.writeFile(DATA_FILE, JSON.stringify(appraisals, null, 2), "utf-8");
+  const appraisal = migrateAppraisal(raw);
+  list.push(appraisal);
+  await writeAppraisals(list);
+  return appraisal;
 }
 
 function clampKpis(kpis: KpiRow[]): KpiRow[] {

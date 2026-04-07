@@ -29,6 +29,11 @@ export type Appraisal = {
   id: string;
   /** Links this appraisal to a demo login user (`MockUser.id`). */
   ownerUserId: string;
+  /**
+   * Demo: manager login id that receives in-app review notifications when the
+   * employee submits. Null when the line manager has no demo account (e.g. Mark → David).
+   */
+  reviewingManagerId: string | null;
   employeeName: string;
   position: string;
   department: string;

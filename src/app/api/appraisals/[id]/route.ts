@@ -1,5 +1,9 @@
 import { NextResponse } from "next/server";
 import { getAppraisal, updateAppraisal } from "@/lib/appraisal-store";
+import {
+  addReviewPendingNotification,
+  removeNotificationsForAppraisal,
+} from "@/lib/notification-store";
 import type {
   Appraisal,
   CapabilityId,
@@ -174,6 +178,17 @@ export async function PATCH(
         { status: 409 }
       );
     }
+    if (
+      action === "employee_submit" &&
+      next.status === "submitted" &&
+      next.reviewingManagerId
+    ) {
+      await addReviewPendingNotification({
+        appraisalId: next.id,
+        managerUserId: next.reviewingManagerId,
+        employeeName: next.employeeName,
+      });
+    }
     return NextResponse.json(next);
   }
 
@@ -237,6 +252,7 @@ export async function PATCH(
         { status: 409 }
       );
     }
+    await removeNotificationsForAppraisal(id);
     return NextResponse.json(next);
   }
 

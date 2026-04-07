@@ -116,14 +116,29 @@ export function migrateAppraisal(raw: unknown): Appraisal {
     ? entityRaw
     : ENTITY_OPTIONS[0];
 
-  const ownerUserId =
+  let ownerUserId =
     typeof a.ownerUserId === "string" && a.ownerUserId
       ? String(a.ownerUserId)
-      : "1";
+      : "emma";
+  if (ownerUserId === "1") ownerUserId = "emma";
+  if (ownerUserId === "2") ownerUserId = "mark";
+
+  const rawReviewing = a.reviewingManagerId;
+  const reviewingManagerId =
+    typeof rawReviewing === "string" && rawReviewing.trim()
+      ? String(rawReviewing)
+      : ownerUserId === "emma"
+        ? "mark"
+        : ownerUserId === "mark"
+          ? null
+          : String(a.managerName ?? "").toLowerCase().includes("mark")
+            ? "mark"
+            : null;
 
   return {
     id: String(a.id ?? ""),
     ownerUserId,
+    reviewingManagerId,
     employeeName: String(a.employeeName ?? ""),
     position: String(a.position ?? ""),
     department: String(a.department ?? ""),

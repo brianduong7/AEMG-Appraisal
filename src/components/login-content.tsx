@@ -79,18 +79,19 @@ export function LoginContent() {
         <div className="my-6 border-t border-zinc-200 dark:border-zinc-700" />
 
         <h2 className="mb-2 text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-          Manager sign-in
+          Manager sign-in (Mark)
         </h2>
         <p className="mb-3 text-xs text-zinc-600 dark:text-zinc-400">
-          Review any employee&apos;s appraisal after they submit. Read/write
-          manager sections only.
+          When Emma (or others who report to Mark) submits an appraisal, you
+          see an in-app notification here and can complete the manager review.
+          You can also create appraisal drafts for any demo employee.
         </p>
         <button
           type="button"
           className="w-full rounded-md border border-zinc-300 bg-white px-4 py-2.5 text-sm font-medium text-zinc-900 transition-colors hover:bg-zinc-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100 dark:hover:bg-zinc-800"
           onClick={() => loginManager()}
         >
-          Sign in as manager
+          Sign in as Mark (manager)
         </button>
 
         <p className="mt-4 text-center text-xs text-zinc-500 dark:text-zinc-400">

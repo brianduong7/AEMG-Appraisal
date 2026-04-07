@@ -324,7 +324,20 @@ export function AppraisalDetailClient({
           className="mb-6 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-100"
           role="status"
         >
-          Appraisal submitted. <strong>Manager has been notified.</strong>
+          {appraisal.reviewingManagerId ? (
+            <>
+              Appraisal submitted.{" "}
+              <strong>Mark</strong> has an in-app notification — sign in as{" "}
+              <strong>Mark (manager)</strong> on the home page to review.
+            </>
+          ) : (
+            <>
+              Appraisal submitted. Your manager{" "}
+              <strong>{appraisal.managerName}</strong> is not set up as a demo
+              user; in production they would be notified by email or your HR
+              system.
+            </>
+          )}
         </div>
       )}
 
