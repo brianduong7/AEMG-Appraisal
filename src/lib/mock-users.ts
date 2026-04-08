@@ -3,6 +3,7 @@ import type { Appraisal } from "./types";
 export type MockUser = {
   id: string;
   employeeName: string;
+  englishName: string;
   position: string;
   department: string;
   mLevel: number;
@@ -15,6 +16,7 @@ export const MOCK_USERS: MockUser[] = [
   {
     id: "emma",
     employeeName: "Emma",
+    englishName: "Emma Thompson",
     position: "Senior Analyst",
     department: "Corporate Finance",
     mLevel: 4,
@@ -24,6 +26,7 @@ export const MOCK_USERS: MockUser[] = [
   {
     id: "mark",
     employeeName: "Mark",
+    englishName: "Mark Stevenson",
     position: "Department Manager",
     department: "Operations",
     mLevel: 6,
@@ -33,6 +36,7 @@ export const MOCK_USERS: MockUser[] = [
   {
     id: "john",
     employeeName: "John",
+    englishName: "John Lee",
     position: "Financial Analyst",
     department: "Corporate Finance",
     mLevel: 3,
@@ -53,6 +57,7 @@ export const DEMO_MANAGER = {
 export type EmploymentProfile = Pick<
   Appraisal,
   | "employeeName"
+  | "englishName"
   | "position"
   | "department"
   | "mLevel"
@@ -63,6 +68,7 @@ export type EmploymentProfile = Pick<
 export function employmentProfileFromUser(u: MockUser): EmploymentProfile {
   return {
     employeeName: u.employeeName,
+    englishName: u.englishName,
     position: u.position,
     department: u.department,
     mLevel: u.mLevel,

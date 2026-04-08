@@ -20,9 +20,12 @@ import {
 } from "@/lib/capability-framework";
 import {
   averageCapabilityRating,
-  weightedKpiScore,
+  capabilityAverageFromDraft,
+  capabilitySelfAverage,
   overallPerformanceScore,
   sumKpiWeights,
+  weightedKpiScore,
+  weightedKpiScoreFromManagerDraft,
 } from "@/lib/kpi-utils";
 import { RatingGuideModalTrigger } from "@/components/rating-guide-modal";
 import { ratingLabel } from "@/lib/ratings";
@@ -40,9 +43,9 @@ import { HeaderNotificationsButton } from "@/components/header-notifications-but
 function emptyKpi(): KpiRow {
   return {
     goalsAndKpis: "",
-    weightPercent: 100,
+    weightPercent: 0,
     dueDate: "",
-    selfRating: 3,
+    selfRating: null,
     managerRating: null,
     managerComments: "",
   };
@@ -58,8 +61,8 @@ function initialDraftForRole(
   return null;
 }
 
-type ManagerKpiLine = { managerRating: number };
-type ManagerCapLine = { managerRating: number };
+type ManagerKpiLine = { managerRating: number | null };
+type ManagerCapLine = { managerRating: number | null };
 
 export function AppraisalDetailClient({
   id,
@@ -225,12 +228,12 @@ function AppraisalDetailInner({
     ) {
       setManagerKpiDraft(
         appraisal.kpis.map((k) => ({
-          managerRating: k.managerRating ?? 3,
+          managerRating: k.managerRating ?? null,
         }))
       );
       setManagerCapDraft(
         appraisal.capabilities.map((c) => ({
-          managerRating: c.managerRating ?? 3,
+          managerRating: c.managerRating ?? null,
         }))
       );
       setManagerReviewComments(appraisal.managerComments ?? "");
@@ -248,13 +251,36 @@ function AppraisalDetailInner({
   const weightsOk = Math.abs(weightTotal - 100) < 0.01;
 
   const kpiSelfScore = weightedKpiScore(src.kpis, "self");
-  const capSelfAvg = averageCapabilityRating(
-    src.capabilities.map((c) => c.selfRating)
-  );
+  const capSelfAvg = capabilitySelfAverage(src.capabilities);
+
+  const employeeSubmitReady = useMemo(() => {
+    if (!draft) return false;
+    if (!weightsOk) return false;
+    if (!draft.kpis.every((k) => (Number(k.weightPercent) || 0) > 0)) {
+      return false;
+    }
+    if (!draft.kpis.every((k) => k.selfRating != null)) return false;
+    if (!draft.capabilities.every((c) => c.selfRating != null)) return false;
+    return true;
+  }, [draft, weightsOk]);
+
+  const managerSubmitReady = useMemo(() => {
+    if (!managerKpiDraft || !managerCapDraft) return false;
+    return (
+      managerKpiDraft.every((d) => d.managerRating != null) &&
+      managerCapDraft.every((d) => d.managerRating != null)
+    );
+  }, [managerKpiDraft, managerCapDraft]);
 
   async function saveEmployee(action: "employee_save" | "employee_submit") {
     if (!draft || !user) return;
     if (user.id !== appraisal.ownerUserId) return;
+    if (action === "employee_submit" && !employeeSubmitReady) {
+      setFormError(
+        "Select a self rating for every KPI and capability, and set each KPI weight above 0% so the total is 100%."
+      );
+      return;
+    }
     setBusy(true);
     setFormError(null);
     const header = employmentProfileFromUser(user);
@@ -294,6 +320,12 @@ function AppraisalDetailInner({
 
   async function submitManagerReview() {
     if (!managerKpiDraft || !managerCapDraft || !appraisal) return;
+    if (!managerSubmitReady) {
+      setFormError(
+        "Select a manager rating for every KPI and capability before submitting."
+      );
+      return;
+    }
     const wasAlreadyReviewed = appraisal.status === "reviewed";
     setBusy(true);
     setFormError(null);
@@ -344,12 +376,9 @@ function AppraisalDetailInner({
       managerKpiDraft &&
       managerKpiDraft.length === appraisal.kpis.length
     ) {
-      return weightedKpiScore(
-        appraisal.kpis.map((k, i) => ({
-          ...k,
-          managerRating: managerKpiDraft[i]!.managerRating,
-        })),
-        "manager"
+      return weightedKpiScoreFromManagerDraft(
+        appraisal.kpis,
+        managerKpiDraft.map((d) => d.managerRating)
       );
     }
     return weightedKpiScore(src.kpis, "manager");
@@ -361,13 +390,13 @@ function AppraisalDetailInner({
       managerCapDraft &&
       managerCapDraft.length === appraisal.capabilities.length
     ) {
-      return averageCapabilityRating(
+      return capabilityAverageFromDraft(
         managerCapDraft.map((c) => c.managerRating)
       );
     }
-    return averageCapabilityRating(
-      src.capabilities.map((c) => c.managerRating ?? c.selfRating)
-    );
+    const merged = src.capabilities.map((c) => c.managerRating ?? c.selfRating);
+    if (merged.some((n) => n == null)) return null;
+    return averageCapabilityRating(merged as number[]);
   }, [managerCanReview, managerCapDraft, appraisal.capabilities, src.capabilities]);
 
   const overallSelf = overallPerformanceScore(kpiSelfScore, capSelfAvg);
@@ -403,6 +432,7 @@ function AppraisalDetailInner({
   const identity = useMemo(() => {
     const fallback = {
       employeeName: src.employeeName,
+      englishName: src.englishName,
       position: src.position,
       department: src.department,
       mLevel: src.mLevel,
@@ -424,6 +454,7 @@ function AppraisalDetailInner({
     appraisal.ownerUserId,
     appraisal.status,
     src.employeeName,
+    src.englishName,
     src.position,
     src.department,
     src.mLevel,
@@ -591,7 +622,12 @@ function AppraisalDetailInner({
               </button>
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy || !employeeSubmitReady}
+                title={
+                  !employeeSubmitReady
+                    ? "Complete all ratings and KPI weights (100% total) to submit"
+                    : undefined
+                }
                 className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50"
                 onClick={() => saveEmployee("employee_submit")}
               >
@@ -603,7 +639,12 @@ function AppraisalDetailInner({
             <>
               <button
                 type="button"
-                disabled={busy}
+                disabled={busy || !managerSubmitReady}
+                title={
+                  !managerSubmitReady
+                    ? "Select a manager rating for every KPI and capability"
+                    : undefined
+                }
                 className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50"
                 onClick={() => submitManagerReview()}
               >
@@ -699,7 +740,8 @@ function AppraisalDetailInner({
                     <div className="mt-4 grid gap-4 sm:grid-cols-2">
                       <div>
                         <label className="mb-1 block text-xs font-medium text-zinc-600">
-                          Employee rating
+                          Employee rating{" "}
+                          <span className="text-zinc-400">(required)</span>
                         </label>
                         {employeeEditable ? (
                           <RatingSelect
@@ -718,7 +760,10 @@ function AppraisalDetailInner({
                       {(isManager || appraisal.status !== "draft") && (
                         <div>
                           <label className="mb-1 block text-xs font-medium text-zinc-600">
-                            Manager rating
+                            Manager rating{" "}
+                            {managerCanReview && (
+                              <span className="text-zinc-400">(required)</span>
+                            )}
                           </label>
                           {managerCanReview && managerCapDraft ? (
                             <RatingSelect
@@ -798,6 +843,12 @@ function AppraisalDetailInner({
                 {!weightsOk && employeeEditable && (
                   <span> — adjust to 100% before submit.</span>
                 )}
+                {employeeEditable &&
+                  draft!.kpis.some((k) => (Number(k.weightPercent) || 0) <= 0) && (
+                    <span className="ml-1">
+                      Each KPI needs a weight greater than 0%.
+                    </span>
+                  )}
               </div>
               <div className="space-y-4">
                 {src.kpis.map((kpi, i) => (
@@ -852,14 +903,18 @@ function AppraisalDetailInner({
                     <div className="grid gap-4 sm:grid-cols-2">
                       <div>
                         <label className="mb-1 block text-xs font-medium text-zinc-600">
-                          Weight (%)
+                          Weight (%) <span className="text-zinc-400">(required)</span>
                         </label>
                         {employeeEditable ? (
                           <input
                             type="number"
                             min={0}
                             max={100}
-                            className={inputEnterprise}
+                            className={`${inputEnterprise} ${
+                              (Number(kpi.weightPercent) || 0) <= 0
+                                ? "border-amber-400 focus:border-amber-500 focus:ring-amber-200"
+                                : ""
+                            }`}
                             value={kpi.weightPercent || ""}
                             onChange={(e) => {
                               if (!draft) return;
@@ -906,7 +961,8 @@ function AppraisalDetailInner({
                     <div className="mt-4 grid gap-4 sm:grid-cols-2">
                       <div>
                         <label className="mb-1 block text-xs font-medium text-zinc-600">
-                          Employee self rating
+                          Employee self rating{" "}
+                          <span className="text-zinc-400">(required)</span>
                         </label>
                         {employeeEditable ? (
                           <RatingSelect
@@ -925,7 +981,10 @@ function AppraisalDetailInner({
                       {(isManager || appraisal.status !== "draft") && (
                         <div>
                           <label className="mb-1 block text-xs font-medium text-zinc-600">
-                            Manager rating
+                            Manager rating{" "}
+                            {managerCanReview && (
+                              <span className="text-zinc-400">(required)</span>
+                            )}
                           </label>
                           {managerCanReview && managerKpiDraft ? (
                             <RatingSelect
@@ -1012,6 +1071,11 @@ function AppraisalDetailInner({
                     required
                   />
                   <HrReadonlyField
+                    label="English name"
+                    value={identity.englishName}
+                    required
+                  />
+                  <HrReadonlyField
                     label="Appraisal cycle"
                     value={`Annual ${appraisalCycleYear}`}
                     required
@@ -1037,7 +1101,6 @@ function AppraisalDetailInner({
                   <HrReadonlyField
                     label="Department"
                     value={identity.department}
-                    className="sm:col-span-2"
                   />
                 </div>
               </div>

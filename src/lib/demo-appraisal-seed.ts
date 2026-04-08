@@ -22,6 +22,7 @@ export function buildDemoSubmittedEmmaForMark(): Appraisal {
     ownerUserId: "emma",
     reviewingManagerId: "mark",
     employeeName: "Emma",
+    englishName: "Emma Thompson",
     position: "Senior Analyst",
     department: "Corporate Finance",
     mLevel: 4,

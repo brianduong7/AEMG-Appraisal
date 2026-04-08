@@ -6,7 +6,8 @@ export type KpiRow = {
   /** Whole percent, e.g. 40 for 40%; KPI rows should sum to 100. */
   weightPercent: number;
   dueDate: string;
-  selfRating: number;
+  /** Unset until employee selects a rating (required before submit). */
+  selfRating: number | null;
   managerRating: number | null;
   managerComments: string;
 };
@@ -20,7 +21,7 @@ export type CapabilityId =
 
 export type CapabilityRow = {
   id: CapabilityId;
-  selfRating: number;
+  selfRating: number | null;
   managerRating: number | null;
   managerComments: string;
 };
@@ -35,6 +36,8 @@ export type Appraisal = {
    */
   reviewingManagerId: string | null;
   employeeName: string;
+  /** Full name in English (HR / directory). */
+  englishName: string;
   position: string;
   department: string;
   /** M level 1–10 — drives Appendix 1 capability descriptions. */

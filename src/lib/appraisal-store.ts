@@ -36,7 +36,7 @@ function getMemoryAppraisals(): Appraisal[] {
 function defaultCapabilities(): CapabilityRow[] {
   return CAPABILITY_ORDER.map((id) => ({
     id,
-    selfRating: 3,
+    selfRating: null,
     managerRating: null,
     managerComments: "",
   }));
@@ -173,7 +173,7 @@ export async function createAppraisal(ownerUserId: string): Promise<Appraisal> {
         goalsAndKpis: "",
         weightPercent: 100,
         dueDate: "",
-        selfRating: 3,
+        selfRating: null,
         managerRating: null,
         managerComments: "",
       },
@@ -193,15 +193,22 @@ export async function createAppraisal(ownerUserId: string): Promise<Appraisal> {
   return finalList.find((a) => a.id === id) ?? appraisal;
 }
 
+function clampOptionalRating(n: unknown): number | null {
+  if (n == null || n === "") return null;
+  const v = Number(n);
+  if (!Number.isFinite(v)) return null;
+  const r = Math.round(v);
+  if (r < 1 || r > 5) return null;
+  return r;
+}
+
 function clampKpis(kpis: KpiRow[]): KpiRow[] {
   return kpis.slice(0, MAX_KPIS).map((k) => ({
     ...k,
     weightPercent: Math.min(100, Math.max(0, Number(k.weightPercent) || 0)),
-    selfRating: Math.min(5, Math.max(1, Number(k.selfRating) || 3)),
+    selfRating: clampOptionalRating(k.selfRating),
     managerRating:
-      k.managerRating == null
-        ? null
-        : Math.min(5, Math.max(1, Number(k.managerRating) || 3)),
+      k.managerRating == null ? null : clampOptionalRating(k.managerRating),
   }));
 }
 
@@ -211,11 +218,9 @@ function clampCapabilities(rows: CapabilityRow[]): CapabilityRow[] {
     const r = byId.get(id);
     return {
       id,
-      selfRating: Math.min(5, Math.max(1, Number(r?.selfRating) || 3)),
+      selfRating: clampOptionalRating(r?.selfRating),
       managerRating:
-        r?.managerRating == null
-          ? null
-          : Math.min(5, Math.max(1, Number(r.managerRating) || 3)),
+        r?.managerRating == null ? null : clampOptionalRating(r.managerRating),
       managerComments: String(r?.managerComments ?? ""),
     };
   });

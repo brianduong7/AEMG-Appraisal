@@ -12,10 +12,45 @@ import type {
   KpiRow,
 } from "@/lib/types";
 import { CAPABILITY_ORDER, MAX_KPIS } from "@/lib/types";
+import { sumKpiWeights } from "@/lib/kpi-utils";
+
+function parseOptionalRating(raw: unknown): number | null {
+  if (raw == null || raw === "") return null;
+  const v = Number(raw);
+  if (!Number.isFinite(v)) return null;
+  const r = Math.round(v);
+  if (r < 1 || r > 5) return null;
+  return r;
+}
+
+function employeeSubmitValidationError(
+  kpis: KpiRow[],
+  capabilities: CapabilityRow[]
+): string | null {
+  for (const k of kpis) {
+    if (k.selfRating == null) {
+      return "Select a self rating for every KPI before submitting.";
+    }
+    if ((Number(k.weightPercent) || 0) <= 0) {
+      return "Each KPI must have a weight greater than 0%.";
+    }
+  }
+  const total = sumKpiWeights(kpis);
+  if (Math.abs(total - 100) >= 0.01) {
+    return "KPI weights must total exactly 100% before submitting.";
+  }
+  for (const c of capabilities) {
+    if (c.selfRating == null) {
+      return "Select a self rating for every capability before submitting.";
+    }
+  }
+  return null;
+}
 
 type EmployeePayload = Pick<
   Appraisal,
   | "employeeName"
+  | "englishName"
   | "position"
   | "department"
   | "mLevel"
@@ -32,6 +67,7 @@ function isEmployeePayload(x: unknown): x is EmployeePayload {
   const mLevel = Number(o.mLevel);
   return (
     typeof o.employeeName === "string" &&
+    typeof o.englishName === "string" &&
     typeof o.position === "string" &&
     typeof o.department === "string" &&
     typeof o.managerName === "string" &&
@@ -53,7 +89,7 @@ function normalizeKpisFromEmployee(rows: unknown[]): KpiRow[] {
         Math.max(0, Number(r.weightPercent) || 0)
       ),
       dueDate: String(r.dueDate ?? ""),
-      selfRating: Math.min(5, Math.max(1, Number(r.selfRating) || 3)),
+      selfRating: parseOptionalRating(r.selfRating),
       managerRating: null,
       managerComments: "",
     };
@@ -69,7 +105,7 @@ function normalizeCapabilitiesFromEmployee(rows: unknown[]): CapabilityRow[] {
       if (!CAPABILITY_ORDER.includes(id)) continue;
       byId.set(id, {
         id,
-        selfRating: Math.min(5, Math.max(1, Number(r.selfRating) || 3)),
+        selfRating: parseOptionalRating(r.selfRating),
         managerRating: null,
         managerComments: "",
       });
@@ -79,7 +115,7 @@ function normalizeCapabilitiesFromEmployee(rows: unknown[]): CapabilityRow[] {
     return (
       byId.get(id) ?? {
         id,
-        selfRating: 3,
+        selfRating: null,
         managerRating: null,
         managerComments: "",
       }
@@ -138,6 +174,13 @@ export async function PATCH(
     const kpis = normalizeKpisFromEmployee(data.kpis);
     const capabilities = normalizeCapabilitiesFromEmployee(data.capabilities);
 
+    if (action === "employee_submit") {
+      const err = employeeSubmitValidationError(kpis, capabilities);
+      if (err) {
+        return NextResponse.json({ error: err }, { status: 400 });
+      }
+    }
+
     const next = await updateAppraisal(id, (current) => {
       if (current.status !== "draft") {
         return null;
@@ -154,6 +197,7 @@ export async function PATCH(
       return {
         ...current,
         employeeName: data.employeeName,
+        englishName: data.englishName,
         position: data.position,
         department: data.department,
         mLevel,
@@ -198,6 +242,28 @@ export async function PATCH(
       (body as { managerComments?: unknown }).managerComments ?? ""
     );
 
+    const kpiManagerRatings = kpisPayload.map((row) =>
+      parseOptionalRating((row as Record<string, unknown>).managerRating)
+    );
+    const capManagerRatings = capsPayload.map((row) =>
+      parseOptionalRating((row as Record<string, unknown>).managerRating)
+    );
+    if (kpiManagerRatings.some((r) => r == null)) {
+      return NextResponse.json(
+        { error: "Select a manager rating for every KPI before submitting." },
+        { status: 400 }
+      );
+    }
+    if (capManagerRatings.some((r) => r == null)) {
+      return NextResponse.json(
+        {
+          error:
+            "Select a manager rating for every capability before submitting.",
+        },
+        { status: 400 }
+      );
+    }
+
     const next = await updateAppraisal(id, (current) => {
       if (current.status !== "submitted" && current.status !== "reviewed") {
         return null;
@@ -209,8 +275,7 @@ export async function PATCH(
         return null;
       }
       const mergedKpis = current.kpis.map((k, i) => {
-        const m = kpisPayload[i] as Record<string, unknown>;
-        const mr = Math.min(5, Math.max(1, Number(m?.managerRating) || 3));
+        const mr = kpiManagerRatings[i]!;
         return {
           ...k,
           managerRating: mr,
@@ -218,8 +283,7 @@ export async function PATCH(
         };
       });
       const mergedCaps = current.capabilities.map((c, i) => {
-        const m = capsPayload[i] as Record<string, unknown>;
-        const mr = Math.min(5, Math.max(1, Number(m?.managerRating) || 3));
+        const mr = capManagerRatings[i]!;
         return {
           ...c,
           managerRating: mr,

@@ -16,10 +16,18 @@ function clampRating(n: unknown, fallback: number): number {
   return Math.min(5, Math.max(1, Math.round(v)));
 }
 
+/** 1–5 or null when unset / legacy empty. */
+function migrateSelfRating(raw: unknown): number | null {
+  if (raw == null || raw === "") return null;
+  const v = Number(raw);
+  if (Number.isNaN(v)) return null;
+  return Math.min(5, Math.max(1, Math.round(v)));
+}
+
 function defaultCapabilities(): CapabilityRow[] {
   return CAPABILITY_ORDER.map((id) => ({
     id,
-    selfRating: 3,
+    selfRating: null,
     managerRating: null,
     managerComments: "",
   }));
@@ -35,7 +43,7 @@ function migrateKpiRow(raw: unknown): KpiRow {
         Math.max(0, Number(o.weightPercent) || 0)
       ),
       dueDate: String(o.dueDate ?? ""),
-      selfRating: clampRating(o.selfRating, 3),
+      selfRating: migrateSelfRating(o.selfRating),
       managerRating:
         o.managerRating == null || o.managerRating === ""
           ? null
@@ -50,7 +58,7 @@ function migrateKpiRow(raw: unknown): KpiRow {
     goalsAndKpis: merged,
     weightPercent: Math.min(100, Math.max(0, Number(o.weightPercent) || 20)),
     dueDate: String(o.dueDate ?? ""),
-    selfRating: clampRating(o.selfRating, 3),
+    selfRating: migrateSelfRating(o.selfRating),
     managerRating:
       o.managerRating == null || o.managerRating === ""
         ? null
@@ -70,7 +78,7 @@ function migrateCapabilities(raw: unknown): CapabilityRow[] {
     if (!CAPABILITY_ORDER.includes(id)) continue;
     byId.set(id, {
       id,
-      selfRating: clampRating(o.selfRating, 3),
+      selfRating: migrateSelfRating(o.selfRating),
       managerRating:
         o.managerRating == null || o.managerRating === ""
           ? null
@@ -82,7 +90,7 @@ function migrateCapabilities(raw: unknown): CapabilityRow[] {
     return (
       byId.get(id) ?? {
         id,
-        selfRating: 3,
+        selfRating: null,
         managerRating: null,
         managerComments: "",
       }
@@ -140,6 +148,9 @@ export function migrateAppraisal(raw: unknown): Appraisal {
     ownerUserId,
     reviewingManagerId,
     employeeName: String(a.employeeName ?? ""),
+    englishName: String(
+      a.englishName ?? a.employeeName ?? ""
+    ),
     position: String(a.position ?? ""),
     department: String(a.department ?? ""),
     mLevel: clampLevel(Number(a.mLevel) || 3),
@@ -155,9 +166,9 @@ export function migrateAppraisal(raw: unknown): Appraisal {
         : [
             {
               goalsAndKpis: "",
-              weightPercent: 20,
+              weightPercent: 0,
               dueDate: "",
-              selfRating: 3,
+              selfRating: null,
               managerRating: null,
               managerComments: "",
             },
