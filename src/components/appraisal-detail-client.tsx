@@ -1160,15 +1160,17 @@ function AppraisalDetailInner({
                 </p>
                 <BigField
                   label="Employee comments"
-                  readOnly={!employeeEditable}
+                  readOnly={!employeeEditable || isManager}
+                  readOnlyMuted={isManager}
                   textareaClassName={inputEnterprise}
                   value={
-                    employeeEditable
+                    employeeEditable && !isManager
                       ? draft!.employeeComments
                       : appraisal.employeeComments
                   }
                   onChange={(v) =>
                     employeeEditable &&
+                    !isManager &&
                     draft &&
                     setDraft({ ...draft, employeeComments: v })
                   }
@@ -1249,23 +1251,35 @@ function BigField({
   value,
   onChange,
   readOnly,
+  readOnlyMuted,
   textareaClassName,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   readOnly: boolean;
+  /** Grey read-only well (e.g. manager viewing employee-owned fields). */
+  readOnlyMuted?: boolean;
   textareaClassName?: string;
 }) {
   const defaultTa =
     "w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-black shadow-sm outline-none focus:border-zinc-400 focus:ring-2 focus:ring-zinc-200";
   return (
     <div>
-      <label className="mb-1.5 block text-xs font-medium text-zinc-600">
+      <label
+        className={`mb-1.5 block text-xs font-medium ${readOnly && readOnlyMuted ? "text-zinc-500" : "text-zinc-600"}`}
+      >
         {label}
       </label>
       {readOnly ? (
-        <div className="rounded-lg border border-zinc-200/80 bg-white px-3 py-2.5 text-sm text-black">
+        <div
+          className={
+            readOnlyMuted
+              ? "cursor-not-allowed rounded-lg border border-zinc-200 bg-zinc-100 px-3 py-2.5 text-sm text-zinc-600 select-none whitespace-pre-wrap"
+              : "rounded-lg border border-zinc-200/80 bg-white px-3 py-2.5 text-sm text-black"
+          }
+          aria-readonly="true"
+        >
           {value?.trim() ? (
             <p className="whitespace-pre-wrap">{value}</p>
           ) : (
