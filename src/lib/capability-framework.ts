@@ -5,7 +5,8 @@ import { CAPABILITY_ORDER } from "./types";
  * Appendix 1 — AEMG Capability Framework (by M level × competency).
  * L3 Planning text matches the form example; other cells are concise level-appropriate expectations.
  */
-const FRAMEWORK_BY_LEVEL: Record<number, Record<CapabilityId, string>> = {
+/** Full Appendix 1 matrix by M level (exported for reference table). */
+export const FRAMEWORK_BY_LEVEL: Record<number, Record<CapabilityId, string>> = {
   1: {
     planning:
       "Follows day-to-day tasks and simple instructions; asks for help to prioritise when unclear.",
@@ -162,4 +163,17 @@ export function capabilityTitle(id: CapabilityId): string {
 
 export function orderedFrameworkRowIds(): CapabilityId[] {
   return [...CAPABILITY_ORDER];
+}
+
+/** Table order: highest level first (matches printed appendix). */
+export const APPENDIX_LEVELS_DESCENDING = [
+  10, 9, 8, 7, 6, 5, 4, 3, 2, 1,
+] as const;
+
+/** Text after "L{n} — " in `M_LEVEL_LABELS` for the Typical Role column. */
+export function typicalRoleForMLevel(level: number): string {
+  const n = Math.min(10, Math.max(1, Math.round(level)));
+  const full = M_LEVEL_LABELS[n] ?? "";
+  const parts = full.split(" — ");
+  return parts.length > 1 ? parts[1]!.trim() : full;
 }

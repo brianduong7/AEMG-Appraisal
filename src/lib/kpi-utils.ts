@@ -5,28 +5,28 @@ export function sumKpiWeights(kpis: KpiRow[]): number {
 }
 
 /**
- * Simple arithmetic mean of KPI ratings (1–5), one value per row.
- * e.g. one KPI rated 2 → average 2 (not weight × rating).
+ * Weighted KPI score (1–5 scale): Σ(weight% × rating) / Σ(weight%).
+ * Same as Σ (weight/100 × rating) when weights total 100%.
  */
-export function averageKpiRating(
+export function weightedKpiScore(
   kpis: KpiRow[],
   which: "self" | "manager"
 ): number | null {
   if (kpis.length === 0) return null;
-  let sum = 0;
-  let n = 0;
+  let weightedSum = 0;
+  let weightTotal = 0;
   for (const k of kpis) {
+    const w = Math.max(0, Number(k.weightPercent) || 0);
     const r =
       which === "self"
         ? k.selfRating
         : k.managerRating ?? k.selfRating;
-    if (typeof r === "number" && !Number.isNaN(r)) {
-      sum += r;
-      n += 1;
-    }
+    if (typeof r !== "number" || Number.isNaN(r)) continue;
+    weightedSum += w * r;
+    weightTotal += w;
   }
-  if (n === 0) return null;
-  return sum / n;
+  if (weightTotal <= 0) return null;
+  return weightedSum / weightTotal;
 }
 
 export function averageCapabilityRating(
@@ -37,7 +37,7 @@ export function averageCapabilityRating(
   return nums.reduce((a, b) => a + b, 0) / nums.length;
 }
 
-/** Blend KPI rating average (1–5) and capability average (1–5). */
+/** Blend weighted KPI score (1–5) and capability average (1–5). */
 export function overallPerformanceScore(
   kpiScore: number | null,
   capScore: number | null

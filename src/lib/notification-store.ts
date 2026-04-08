@@ -5,8 +5,11 @@ import { randomUUID } from "crypto";
 const DATA_DIR = path.join(process.cwd(), "data");
 const DATA_FILE = path.join(DATA_DIR, "notifications.json");
 
-const USE_MEMORY_STORE =
-  process.env.APPRAISAL_STORE === "memory" || process.env.VERCEL === "1";
+/**
+ * Default: in-memory only (no disk writes). Use APPRAISAL_STORE=file with the
+ * appraisal store for local JSON persistence.
+ */
+const USE_MEMORY_STORE = process.env.APPRAISAL_STORE !== "file";
 
 export type ManagerReviewNotification = {
   id: string;
@@ -65,7 +68,17 @@ export async function listNotificationsForManager(
   managerUserId: string
 ): Promise<ManagerReviewNotification[]> {
   const all = await readAll();
-  return all.filter((n) => n.managerUserId === managerUserId);
+  const mine = all.filter((n) => n.managerUserId === managerUserId);
+  const byEmployee = new Map<string, ManagerReviewNotification>();
+  for (const n of mine) {
+    const prev = byEmployee.get(n.employeeName);
+    if (!prev || n.createdAt > prev.createdAt) {
+      byEmployee.set(n.employeeName, n);
+    }
+  }
+  return [...byEmployee.values()].sort((a, b) =>
+    a.createdAt < b.createdAt ? 1 : -1
+  );
 }
 
 export async function addReviewPendingNotification(input: {
@@ -74,15 +87,21 @@ export async function addReviewPendingNotification(input: {
   employeeName: string;
 }): Promise<void> {
   const all = await readAll();
-  if (all.some((n) => n.appraisalId === input.appraisalId)) return;
-  all.push({
+  const withoutSameEmployee = all.filter(
+    (n) =>
+      !(
+        n.managerUserId === input.managerUserId &&
+        n.employeeName === input.employeeName
+      )
+  );
+  withoutSameEmployee.push({
     id: randomUUID(),
     appraisalId: input.appraisalId,
     managerUserId: input.managerUserId,
     employeeName: input.employeeName,
     createdAt: new Date().toISOString(),
   });
-  await writeAll(all);
+  await writeAll(withoutSameEmployee);
 }
 
 export async function removeNotificationsForAppraisal(

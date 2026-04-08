@@ -4,8 +4,6 @@ import { Suspense } from "react";
 import { useSession } from "@/contexts/session-context";
 import { HomeContent } from "@/components/home-content";
 import { LoginContent } from "@/components/login-content";
-import { entityShellClass } from "@/lib/entity-theme";
-
 export function HomeShell() {
   const { ready, isAuthenticated } = useSession();
 
@@ -19,7 +17,7 @@ export function HomeShell() {
 
   if (!isAuthenticated) {
     return (
-      <div className={entityShellClass(null)}>
+      <div className="flex min-h-full flex-1 flex-col bg-zinc-50 text-black">
         <LoginContent />
       </div>
     );

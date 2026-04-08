@@ -9,13 +9,20 @@ import {
   findMockUser,
   reviewingManagerIdForOwner,
 } from "./mock-users";
+import { buildDemoSubmittedEmmaForMark } from "./demo-appraisal-seed";
+import {
+  addReviewPendingNotification,
+  removeNotificationsForAppraisal,
+} from "./notification-store";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const DATA_FILE = path.join(DATA_DIR, "appraisals.json");
 
-/** Vercel serverless has a read-only filesystem; file-based store always fails there. */
-const USE_MEMORY_STORE =
-  process.env.APPRAISAL_STORE === "memory" || process.env.VERCEL === "1";
+/**
+ * Default: in-memory only (no disk writes — safe for serverless / read-only hosts).
+ * Optional local persistence: run with APPRAISAL_STORE=file (writes under /data).
+ */
+const USE_MEMORY_STORE = process.env.APPRAISAL_STORE !== "file";
 
 let memoryAppraisals: Appraisal[] | null = null;
 
@@ -60,8 +67,74 @@ async function ensureFile(): Promise<Appraisal[]> {
   }
 }
 
+/**
+ * Demo: exactly one appraisal row per `ownerUserId`. Last row in list order wins;
+ * others are removed and their notifications cleared.
+ */
+async function enforceOneAppraisalPerOwner(list: Appraisal[]): Promise<{
+  next: Appraisal[];
+  changed: boolean;
+}> {
+  const chosen = new Map<string, Appraisal>();
+  for (const a of list) {
+    chosen.set(a.ownerUserId, a);
+  }
+  const keepIds = new Set([...chosen.values()].map((x) => x.id));
+  const dropped = list.filter((a) => !keepIds.has(a.id));
+  for (const a of dropped) {
+    await removeNotificationsForAppraisal(a.id);
+  }
+
+  const ordered: Appraisal[] = [];
+  const seenOwner = new Set<string>();
+  for (const a of list) {
+    const pick = chosen.get(a.ownerUserId)!;
+    if (a.id !== pick.id || seenOwner.has(a.ownerUserId)) continue;
+    ordered.push(a);
+    seenOwner.add(a.ownerUserId);
+  }
+
+  const changed = ordered.length !== list.length;
+  return { next: ordered, changed };
+}
+
+async function applyAppraisalListPolicy(
+  list: Appraisal[]
+): Promise<{ next: Appraisal[]; changed: boolean }> {
+  return enforceOneAppraisalPerOwner(list);
+}
+
+async function ensureDemoSubmittedEmmaForMark(
+  list: Appraisal[]
+): Promise<Appraisal[]> {
+  if (process.env.DISABLE_DEMO_APPRAISAL_SEED === "1") {
+    return list;
+  }
+  if (list.some((a) => a.ownerUserId === "emma")) {
+    return list;
+  }
+  const demo = buildDemoSubmittedEmmaForMark();
+  list.push(demo);
+  await writeAppraisals(list);
+  if (demo.reviewingManagerId) {
+    await addReviewPendingNotification({
+      appraisalId: demo.id,
+      managerUserId: demo.reviewingManagerId,
+      employeeName: demo.employeeName,
+    });
+  }
+  return list;
+}
+
 export async function readAppraisals(): Promise<Appraisal[]> {
-  return ensureFile();
+  let list = await ensureFile();
+  list = await ensureDemoSubmittedEmmaForMark(list);
+  const { next, changed } = await applyAppraisalListPolicy(list);
+  if (changed) {
+    await writeAppraisals(next);
+    return next;
+  }
+  return list;
 }
 
 export async function getAppraisal(id: string): Promise<Appraisal | null> {
@@ -98,7 +171,7 @@ export async function createAppraisal(ownerUserId: string): Promise<Appraisal> {
     kpis: [
       {
         goalsAndKpis: "",
-        weightPercent: 20,
+        weightPercent: 100,
         dueDate: "",
         selfRating: 3,
         managerRating: null,
@@ -110,9 +183,14 @@ export async function createAppraisal(ownerUserId: string): Promise<Appraisal> {
     managerComments: "",
   };
   const appraisal = migrateAppraisal(raw);
-  list.push(appraisal);
-  await writeAppraisals(list);
-  return appraisal;
+  const withNew = [...list, appraisal];
+  await writeAppraisals(withNew);
+  const { next, changed } = await applyAppraisalListPolicy(withNew);
+  if (changed) {
+    await writeAppraisals(next);
+  }
+  const finalList = changed ? next : withNew;
+  return finalList.find((a) => a.id === id) ?? appraisal;
 }
 
 function clampKpis(kpis: KpiRow[]): KpiRow[] {
@@ -156,5 +234,11 @@ export async function updateAppraisal(
   next.capabilities = clampCapabilities(next.capabilities);
   list[idx] = next;
   await writeAppraisals(list);
+  const { next: normalized, changed } = await applyAppraisalListPolicy(list);
+  if (changed) {
+    await writeAppraisals(normalized);
+    const updated = normalized.find((a) => a.id === id);
+    return updated ?? next;
+  }
   return next;
 }

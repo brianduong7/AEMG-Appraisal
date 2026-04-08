@@ -4,19 +4,18 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Appraisal } from "@/lib/types";
-import {
-  appraisalListDisplayName,
-  entityShellClass,
-} from "@/lib/entity-theme";
+import { appraisalListDisplayName } from "@/lib/entity-theme";
 import { MOCK_USERS } from "@/lib/mock-users";
 import { useRole } from "@/contexts/role-context";
 import { useSession } from "@/contexts/session-context";
+import { saveAppraisalBootstrap } from "@/lib/appraisal-bootstrap";
+import { HeaderNotificationsButton } from "@/components/header-notifications-button";
 
 function statusBadge(status: Appraisal["status"]) {
   const map = {
-    draft: "bg-zinc-200 text-zinc-800 dark:bg-zinc-700 dark:text-zinc-200",
-    submitted: "bg-sky-100 text-sky-900 dark:bg-sky-900/40 dark:text-sky-100",
-    reviewed: "bg-emerald-100 text-emerald-900 dark:bg-emerald-900/40 dark:text-emerald-100",
+    draft: "bg-zinc-200 text-black",
+    submitted: "bg-sky-100 text-sky-900",
+    reviewed: "bg-emerald-100 text-emerald-900",
   };
   return map[status];
 }
@@ -119,6 +118,7 @@ export function HomeContent() {
       await refreshList();
       await refreshNotifications();
       const appraisal = body as Appraisal;
+      saveAppraisalBootstrap(appraisal);
       router.push(`/appraisal/${appraisal.id}`);
     } catch {
       setCreateError("Network error.");
@@ -142,21 +142,52 @@ export function HomeContent() {
       ? `${managerProfile.displayName} (manager)`
       : user?.employeeName ?? "Employee";
 
-  const themeEntity =
-    mode === "employee" && user ? user.entity : null;
+  const chromeInitial =
+    (mode === "employee" && user?.employeeName?.[0]?.toUpperCase()) ||
+    (mode === "manager" && managerProfile?.displayName?.[0]?.toUpperCase()) ||
+    "A";
 
   return (
-    <div
-      className={`flex flex-1 flex-col ${entityShellClass(themeEntity)}`}
-    >
-      <div className="mx-auto w-full max-w-3xl flex-1 px-4 py-10">
+    <div className="flex min-h-full flex-1 flex-col bg-zinc-50 text-black">
+      <header className="border-b border-zinc-200/80 bg-white">
+        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-6 py-3">
+          <nav
+            className="text-xs text-zinc-500"
+            aria-label="Breadcrumb"
+          >
+            <span className="font-medium text-black">
+              Performance
+            </span>
+            <span className="mx-1.5 text-zinc-300">/</span>
+            <span className="text-zinc-500">Appraisal</span>
+          </nav>
+          <div className="ml-auto flex min-w-48 max-w-xl flex-1 items-center justify-end gap-3">
+            <input
+              type="search"
+              readOnly
+              placeholder="Search or type a command (⌘ + G)"
+              className="hidden w-full max-w-md rounded-full border border-zinc-200 bg-zinc-50 px-4 py-2 text-xs text-zinc-500 md:block"
+              aria-hidden
+            />
+            <HeaderNotificationsButton />
+            <div
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-sm font-semibold text-white"
+              aria-hidden
+            >
+              {chromeInitial}
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div className="mx-auto w-full max-w-3xl flex-1 px-6 py-10">
       <header className="mb-8">
-        <h1 className="text-2xl font-semibold tracking-tight text-zinc-900 dark:text-zinc-50">
-          AEMG Appraisal
+        <h1 className="text-2xl font-semibold tracking-tight text-black">
+          Appraisal
         </h1>
-        <p className="mt-1 text-sm text-zinc-600 dark:text-zinc-400">
+        <p className="mt-1 text-sm text-zinc-600">
           Signed in as{" "}
-          <span className="font-medium text-zinc-800 dark:text-zinc-200">
+          <span className="font-medium text-black">
             {sessionLabel}
           </span>
           .
@@ -178,7 +209,7 @@ export function HomeContent() {
         <button
           type="button"
           onClick={() => logout()}
-          className="mt-3 text-sm font-medium text-zinc-600 underline hover:text-zinc-900 dark:text-zinc-400 dark:hover:text-zinc-100"
+          className="mt-3 text-sm font-medium text-zinc-600 underline hover:text-black"
         >
           Sign out
         </button>
@@ -186,7 +217,7 @@ export function HomeContent() {
 
       {notice === "submitted" && (
         <div
-          className="mb-6 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-100"
+          className="mb-6 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900"
           role="status"
         >
           Appraisal submitted. <strong>Manager has been notified.</strong>
@@ -195,10 +226,10 @@ export function HomeContent() {
 
       {mode === "manager" && notifications.length > 0 && (
         <section
-          className="mb-8 rounded-lg border border-amber-200 bg-amber-50 px-4 py-4 dark:border-amber-900/50 dark:bg-amber-950/30"
+          className="mb-8 rounded-lg border border-amber-200 bg-amber-50 px-4 py-4"
           aria-label="Review notifications"
         >
-          <h2 className="text-sm font-semibold text-amber-950 dark:text-amber-100">
+          <h2 className="text-sm font-semibold text-amber-950">
             Pending your review
           </h2>
           <ul className="mt-3 space-y-2">
@@ -206,12 +237,12 @@ export function HomeContent() {
               <li key={n.id}>
                 <Link
                   href={`/appraisal/${n.appraisalId}`}
-                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-200/80 bg-white px-3 py-2 text-sm text-amber-950 transition-colors hover:bg-amber-100/80 dark:border-amber-800/50 dark:bg-zinc-950 dark:text-amber-50 dark:hover:bg-amber-950/40"
+                  className="flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-200/80 bg-white px-3 py-2 text-sm text-amber-950 transition-colors hover:bg-amber-100/80"
                 >
                   <span>
                     <strong>{n.employeeName}</strong> submitted an appraisal
                   </span>
-                  <span className="text-xs font-medium text-amber-800 dark:text-amber-200">
+                  <span className="text-xs font-medium text-amber-800">
                     Open →
                   </span>
                 </Link>
@@ -221,39 +252,40 @@ export function HomeContent() {
         </section>
       )}
 
-      <section className="mb-8 rounded-lg border border-zinc-200 bg-white/60 p-4 dark:border-zinc-700 dark:bg-zinc-950/40">
-        <h2 className="text-sm font-semibold text-zinc-900 dark:text-zinc-50">
-          New appraisal
-        </h2>
-        <p className="mt-1 text-xs text-zinc-600 dark:text-zinc-400">
-          Emma&apos;s plans default to <strong>Emma</strong> as employee and{" "}
-          <strong>Mark</strong> as manager (Mark gets an in-app alert on
-          submit). Mark&apos;s own plan uses <strong>Mark</strong> and manager{" "}
-          <strong>David Park</strong> (no demo login for David — submit still
-          records the handoff for a real system).
-        </p>
-        {mode === "employee" && user && (
-          <button
-            type="button"
-            disabled={createBusy}
-            className="mt-3 rounded-md bg-zinc-900 px-4 py-2 text-sm font-medium text-white disabled:opacity-50 dark:bg-zinc-100 dark:text-zinc-900"
-            onClick={() => createAppraisalForOwner(user.id)}
-          >
-            {createBusy ? "Creating…" : "Create appraisal for me"}
-          </button>
-        )}
+      <section className="mb-8 rounded-lg border border-zinc-200 bg-white p-4 shadow-sm">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-black">Add appraisal</h2>
+            <p className="mt-1 text-xs text-zinc-600">
+              Employee and company details are shown on the{" "}
+              <strong>Overview</strong> tab after you open a plan. Demo:{" "}
+              <strong>one appraisal per employee</strong> — adding another
+              replaces the previous row (latest wins).
+            </p>
+          </div>
+          {mode === "employee" && user && (
+            <button
+              type="button"
+              disabled={createBusy}
+              className="shrink-0 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+              onClick={() => createAppraisalForOwner(user.id)}
+            >
+              {createBusy ? "Creating…" : "+ Add appraisal"}
+            </button>
+          )}
+        </div>
         {mode === "manager" && (
-          <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-end">
+          <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:items-end">
             <div className="min-w-0 flex-1">
               <label
                 htmlFor="create-for"
-                className="mb-1 block text-xs font-medium text-zinc-600 dark:text-zinc-400"
+                className="mb-1 block text-xs font-medium text-zinc-600"
               >
                 Employee
               </label>
               <select
                 id="create-for"
-                className="w-full rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-zinc-900 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
+                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2 text-sm text-black"
                 value={managerCreateOwnerId}
                 onChange={(e) => setManagerCreateOwnerId(e.target.value)}
               >
@@ -267,54 +299,71 @@ export function HomeContent() {
             <button
               type="button"
               disabled={createBusy}
-              className="shrink-0 rounded-md border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-zinc-900 disabled:opacity-50 dark:border-zinc-600 dark:bg-zinc-900 dark:text-zinc-100"
+              className="shrink-0 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
               onClick={() => createAppraisalForOwner(managerCreateOwnerId)}
             >
-              {createBusy ? "Creating…" : "Create appraisal"}
+              {createBusy ? "Creating…" : "+ Add appraisal"}
             </button>
           </div>
         )}
         {createError && (
-          <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+          <p className="mt-2 text-sm text-red-600">
             {createError}
           </p>
         )}
       </section>
 
       <section>
-        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500 dark:text-zinc-400">
+        <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-zinc-500">
           {mode === "employee" ? "Your appraisals" : "All appraisals"}
         </h2>
         {error && (
-          <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          <p className="text-sm text-red-600">{error}</p>
         )}
         {!list && !error && (
           <p className="text-sm text-zinc-500">Loading…</p>
         )}
         {list && list.length === 0 && (
-          <p className="text-sm text-zinc-500">
-            No appraisals yet. Use <strong>New appraisal</strong> above.
-          </p>
+          <div className="rounded-lg border border-zinc-200 bg-white px-6 py-12 text-center">
+            <p className="text-sm text-zinc-600">
+              You haven&apos;t created an appraisal yet.
+            </p>
+            {mode === "employee" && user ? (
+              <button
+                type="button"
+                disabled={createBusy}
+                className="mt-4 rounded-lg border border-zinc-300 bg-zinc-50 px-4 py-2 text-sm font-medium text-black disabled:cursor-not-allowed disabled:opacity-50"
+                onClick={() => createAppraisalForOwner(user.id)}
+              >
+                {createBusy ? "Creating…" : "Create your first appraisal"}
+              </button>
+            ) : (
+              <p className="mt-4 text-xs text-zinc-500">
+                Use <strong>+ Add appraisal</strong> above after choosing an
+                employee.
+              </p>
+            )}
+          </div>
         )}
         {visibleAppraisals &&
           list &&
           list.length > 0 &&
           visibleAppraisals.length === 0 &&
           mode === "employee" && (
-            <p className="text-sm text-zinc-600 dark:text-zinc-400">
+            <p className="text-sm text-zinc-600">
               No appraisal is assigned to your account. Create one above or
               sign in as another demo employee.
             </p>
           )}
         {visibleAppraisals && visibleAppraisals.length > 0 && (
-          <ul className="divide-y divide-zinc-200 rounded-lg border border-zinc-200 dark:divide-zinc-700 dark:border-zinc-700">
+          <ul className="divide-y divide-zinc-200 rounded-lg border border-zinc-200">
             {visibleAppraisals.map((a) => (
               <li key={a.id}>
                 <Link
                   href={`/appraisal/${a.id}`}
-                  className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-zinc-50 dark:hover:bg-zinc-900/50"
+                  className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 transition-colors hover:bg-zinc-50"
                 >
-                  <span className="font-medium text-zinc-900 dark:text-zinc-100">
+                  <span className="font-medium text-black">
                     {appraisalListDisplayName(
                       a,
                       mode ?? "employee",

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAppraisal, updateAppraisal } from "@/lib/appraisal-store";
+import { DEMO_MANAGER } from "@/lib/mock-users";
 import {
   addReviewPendingNotification,
   removeNotificationsForAppraisal,
@@ -11,7 +12,6 @@ import type {
   KpiRow,
 } from "@/lib/types";
 import { CAPABILITY_ORDER, MAX_KPIS } from "@/lib/types";
-import { sumKpiWeights } from "@/lib/kpi-utils";
 
 type EmployeePayload = Pick<
   Appraisal,
@@ -138,16 +138,6 @@ export async function PATCH(
     const kpis = normalizeKpisFromEmployee(data.kpis);
     const capabilities = normalizeCapabilitiesFromEmployee(data.capabilities);
 
-    if (action === "employee_submit") {
-      const w = sumKpiWeights(kpis);
-      if (Math.abs(w - 100) > 0.01) {
-        return NextResponse.json(
-          { error: `KPI weights must total 100% (currently ${w}%).` },
-          { status: 400 }
-        );
-      }
-    }
-
     const next = await updateAppraisal(id, (current) => {
       if (current.status !== "draft") {
         return null;
@@ -156,6 +146,11 @@ export async function PATCH(
         10,
         Math.max(1, Math.round(Number((data as { mLevel: unknown }).mLevel) || 3))
       );
+      const reviewingManagerId =
+        action === "employee_submit"
+          ? (current.reviewingManagerId ?? DEMO_MANAGER.id)
+          : current.reviewingManagerId;
+
       return {
         ...current,
         employeeName: data.employeeName,
@@ -168,6 +163,7 @@ export async function PATCH(
         capabilities,
         employeeComments: data.employeeComments,
         managerComments: current.managerComments,
+        reviewingManagerId,
         status: action === "employee_submit" ? "submitted" : "draft",
       };
     });
@@ -178,14 +174,10 @@ export async function PATCH(
         { status: 409 }
       );
     }
-    if (
-      action === "employee_submit" &&
-      next.status === "submitted" &&
-      next.reviewingManagerId
-    ) {
+    if (action === "employee_submit" && next.status === "submitted") {
       await addReviewPendingNotification({
         appraisalId: next.id,
-        managerUserId: next.reviewingManagerId,
+        managerUserId: next.reviewingManagerId ?? DEMO_MANAGER.id,
         employeeName: next.employeeName,
       });
     }
@@ -207,7 +199,7 @@ export async function PATCH(
     );
 
     const next = await updateAppraisal(id, (current) => {
-      if (current.status !== "submitted") {
+      if (current.status !== "submitted" && current.status !== "reviewed") {
         return null;
       }
       if (
@@ -222,7 +214,7 @@ export async function PATCH(
         return {
           ...k,
           managerRating: mr,
-          managerComments: String(m?.managerComments ?? ""),
+          managerComments: "",
         };
       });
       const mergedCaps = current.capabilities.map((c, i) => {
@@ -231,7 +223,7 @@ export async function PATCH(
         return {
           ...c,
           managerRating: mr,
-          managerComments: String(m?.managerComments ?? ""),
+          managerComments: "",
         };
       });
       return {
@@ -247,7 +239,7 @@ export async function PATCH(
       return NextResponse.json(
         {
           error:
-            "Cannot submit manager review: appraisal must be submitted and row counts must match",
+            "Cannot update manager review: appraisal must be submitted or reviewed, with matching row counts",
         },
         { status: 409 }
       );
