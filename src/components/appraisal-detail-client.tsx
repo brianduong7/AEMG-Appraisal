@@ -23,7 +23,6 @@ import {
   capabilityAverageFromDraft,
   capabilitySelfAverage,
   overallPerformanceScore,
-  formatKpiRowWeightedGoalScore,
   sumKpiWeights,
   weightedKpiScore,
   weightedKpiScoreFromManagerDraft,
@@ -869,7 +868,7 @@ function AppraisalDetailInner({
                 <RatingGuideModalTrigger label="Rating definitions" />
               </div>
               <p className="mb-4 text-sm text-zinc-600">
-                Up to {MAX_KPIS} KPIs in a list view: KRA, weight (%), due date,
+                Up to {MAX_KPIS} KPIs in a list view: KPI, weight (%), due date,
                 and ratings. The KPI score below is{" "}
                 <strong>weighted</strong>: each row contributes{" "}
                 <strong>weight% × rating</strong>, summed and divided by total
@@ -906,7 +905,7 @@ function AppraisalDetailInner({
                         No.
                       </th>
                       <th className="min-w-56 px-2 py-2.5" scope="col">
-                        KRA <span className="text-red-600">*</span>
+                        KPI <span className="text-red-600">*</span>
                       </th>
                       <th className="w-24 px-2 py-2.5" scope="col">
                         Weight (%) <span className="text-red-600">*</span>
@@ -917,9 +916,6 @@ function AppraisalDetailInner({
                       <th className="min-w-36 px-2 py-2.5" scope="col">
                         Employee rating{" "}
                         <span className="text-red-600">*</span>
-                      </th>
-                      <th className="w-32 px-2 py-2.5 text-right" scope="col">
-                        Goal score (weighted)
                       </th>
                       {(isManager || appraisal.status !== "draft") && (
                         <th className="min-w-36 px-2 py-2.5" scope="col">
@@ -1039,12 +1035,6 @@ function AppraisalDetailInner({
                             />
                           ) : (
                             <RatingReadOnly value={kpi.selfRating} />
-                          )}
-                        </td>
-                        <td className="px-2 py-2 text-right font-mono text-xs text-zinc-700">
-                          {formatKpiRowWeightedGoalScore(
-                            kpi.weightPercent,
-                            kpi.selfRating
                           )}
                         </td>
                         {(isManager || appraisal.status !== "draft") && (
