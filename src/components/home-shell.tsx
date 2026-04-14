@@ -17,7 +17,7 @@ export function HomeShell() {
 
   if (!isAuthenticated) {
     return (
-      <div className="flex min-h-full flex-1 flex-col bg-zinc-50 text-black">
+      <div className="flex min-h-full flex-1 flex-col bg-[#F3F4F6] text-black">
         <LoginContent />
       </div>
     );

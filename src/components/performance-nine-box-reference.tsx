@@ -1,3 +1,8 @@
+"use client";
+
+import { useEffect } from "react";
+import { createPortal } from "react-dom";
+
 /**
  * Reference: suggested 9-point performance grid (performance × capability / behaviour).
  * Read-only; scores in titles match the framework document.
@@ -73,13 +78,24 @@ const cornerCell =
 const dataCell =
   "border border-zinc-300 bg-white px-3 py-3 text-center align-top";
 
-export function PerformanceNineBoxReference() {
+export function PerformanceNineBoxReference({
+  embedded = false,
+}: {
+  /** Hide top heading when shown inside {@link PerformanceNineBoxModal}. */
+  embedded?: boolean;
+} = {}) {
   return (
     <div>
-      <h3 className="text-base font-bold text-black">
-        Suggested performance ratings — additional option
-      </h3>
-      <p className="mt-3 text-sm leading-relaxed text-zinc-700">{INTRO}</p>
+      {!embedded && (
+        <h3 className="text-base font-bold text-black">
+          Suggested performance ratings — additional option
+        </h3>
+      )}
+      <p
+        className={`text-sm leading-relaxed text-zinc-700 ${embedded ? "" : "mt-3"}`}
+      >
+        {INTRO}
+      </p>
 
       <div className="mt-6 overflow-x-auto">
         <table className="w-full min-w-176 border-collapse text-sm text-black">
@@ -124,5 +140,62 @@ export function PerformanceNineBoxReference() {
         Reference only. Formal ratings use the KPI and Capability sections above.
       </p>
     </div>
+  );
+}
+
+export function PerformanceNineBoxModal({
+  open,
+  onClose,
+}: {
+  open: boolean;
+  onClose: () => void;
+}) {
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") onClose();
+    };
+    window.addEventListener("keydown", onKey);
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prevOverflow;
+    };
+  }, [open, onClose]);
+
+  if (!open) return null;
+
+  return createPortal(
+    <>
+      <div
+        className="fixed inset-0 z-[199] bg-black/45"
+        aria-hidden
+        onClick={onClose}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="nine-box-modal-title"
+        className="fixed left-1/2 top-1/2 z-[200] flex max-h-[min(92vh,100dvh)] w-[min(calc(100vw-2rem),56rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-zinc-200 bg-white text-black shadow-xl"
+      >
+        <div className="flex shrink-0 items-start justify-between gap-4 border-b border-zinc-200 px-5 py-4">
+          <h2 id="nine-box-modal-title" className="text-lg font-semibold">
+            9-point performance grid (reference)
+          </h2>
+          <button
+            type="button"
+            onClick={onClose}
+            className="shrink-0 rounded-md px-2 py-1 text-sm text-zinc-600 hover:bg-zinc-100"
+          >
+            Close
+          </button>
+        </div>
+        <div className="rating-guide-dialog-scroll min-h-0 flex-1 overflow-y-auto px-5 py-4">
+          <PerformanceNineBoxReference embedded />
+        </div>
+      </div>
+    </>,
+    document.body
   );
 }

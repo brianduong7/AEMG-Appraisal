@@ -23,6 +23,7 @@ import {
   capabilityAverageFromDraft,
   capabilitySelfAverage,
   overallPerformanceScore,
+  formatKpiRowWeightedGoalScore,
   sumKpiWeights,
   weightedKpiScore,
   weightedKpiScoreFromManagerDraft,
@@ -31,9 +32,13 @@ import { RatingGuideModalTrigger } from "@/components/rating-guide-modal";
 import { ratingLabel } from "@/lib/ratings";
 import { useRole } from "@/contexts/role-context";
 import { RatingReadOnly, RatingSelect } from "@/components/rating-select";
-import { RatingLegend } from "@/components/rating-legend";
-import { CapabilityAppendixReference } from "@/components/capability-appendix-reference";
-import { PerformanceNineBoxReference } from "@/components/performance-nine-box-reference";
+import {
+  RatingLegendModal,
+} from "@/components/rating-legend";
+import { CapabilityAppendixModal } from "@/components/capability-appendix-reference";
+import {
+  PerformanceNineBoxModal,
+} from "@/components/performance-nine-box-reference";
 import {
   readAppraisalBootstrap,
   saveAppraisalBootstrap,
@@ -214,6 +219,9 @@ function AppraisalDetailInner({
   const [activeTab, setActiveTab] = useState<
     "overview" | "kpi" | "capability" | "overall"
   >("overview");
+  const [ratingLegendOpen, setRatingLegendOpen] = useState(false);
+  const [nineBoxModalOpen, setNineBoxModalOpen] = useState(false);
+  const [capabilityAppendixOpen, setCapabilityAppendixOpen] = useState(false);
 
   const appraisalCycleYear = useMemo(() => new Date().getFullYear(), []);
   const appraisalSeries = useMemo(
@@ -531,7 +539,7 @@ function AppraisalDetailInner({
         </div>
       </header>
 
-      <div className="mx-auto w-full max-w-6xl flex-1 px-6 py-8">
+      <div className="mx-auto w-full max-w-[min(100%,96rem)] flex-1 px-6 py-8">
       <Link
         href="/"
         className="mb-6 inline-block text-sm font-medium text-zinc-600 hover:text-black"
@@ -702,8 +710,8 @@ function AppraisalDetailInner({
         </p>
       )}
 
-        <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
-          <div className="min-w-0 flex-1 space-y-8">
+        <div className="w-full">
+          <div className="min-w-0 w-full space-y-8">
             {activeTab === "capability" ? (
               <>
                 <div className="rounded-xl border border-zinc-200/80 bg-white p-6 shadow-sm">
@@ -721,69 +729,100 @@ function AppraisalDetailInner({
                 </h2>
                 <RatingGuideModalTrigger label="Rating definitions" />
               </div>
-              <p className="mb-4 text-sm text-zinc-600">
-                Descriptions follow <strong>Appendix 1 — Capability Framework</strong>{" "}
-                for the selected M level.
-              </p>
-              <div className="space-y-4">
-                {src.capabilities.map((cap, i) => (
-                  <div
-                    key={cap.id}
-                    className="rounded-lg border border-zinc-200 p-4"
-                  >
-                    <h3 className="text-sm font-semibold text-black">
-                      {capabilityTitle(cap.id)}
-                    </h3>
-                    <p className="mt-2 text-sm leading-relaxed text-black">
-                      {capabilityDescription(levelForFramework, cap.id)}
-                    </p>
-                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-zinc-600">
-                          Employee rating{" "}
-                          <span className="text-zinc-400">(required)</span>
-                        </label>
-                        {employeeEditable ? (
-                          <RatingSelect
-                            value={cap.selfRating}
-                            onChange={(n) => {
-                              if (!draft) return;
-                              const caps = [...draft.capabilities];
-                              caps[i] = { ...caps[i], selfRating: n };
-                              setDraft({ ...draft, capabilities: caps });
-                            }}
-                          />
-                        ) : (
-                          <RatingReadOnly value={cap.selfRating} />
-                        )}
-                      </div>
+              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
+                <p className="text-sm text-zinc-600">
+                  Descriptions are prefilled for your M level. Open the appendix
+                  for the full M1–M10 framework.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setCapabilityAppendixOpen(true)}
+                  className="shrink-0 rounded border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-800 shadow-sm hover:bg-zinc-50"
+                >
+                  Appendix 1 — AEMG Capability Framework
+                </button>
+              </div>
+              <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
+                <table className="w-full min-w-4xl border-collapse text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-zinc-200 bg-zinc-100 text-xs font-semibold uppercase tracking-wide text-zinc-700">
+                      <th className="w-12 px-2 py-2.5" scope="col">
+                        No.
+                      </th>
+                      <th className="min-w-36 px-2 py-2.5" scope="col">
+                        Capability
+                      </th>
+                      <th className="min-w-[18rem] px-2 py-2.5" scope="col">
+                        Description
+                      </th>
+                      <th className="min-w-36 px-2 py-2.5" scope="col">
+                        Employee rating{" "}
+                        <span className="font-normal text-red-600">*</span>
+                      </th>
                       {(isManager || appraisal.status !== "draft") && (
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-zinc-600">
-                            Manager rating{" "}
-                            {managerCanReview && (
-                              <span className="text-zinc-400">(required)</span>
-                            )}
-                          </label>
-                          {managerCanReview && managerCapDraft ? (
+                        <th className="min-w-36 px-2 py-2.5" scope="col">
+                          Manager rating
+                          {managerCanReview && (
+                            <span className="font-normal text-red-600"> *</span>
+                          )}
+                        </th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {src.capabilities.map((cap, i) => (
+                      <tr
+                        key={cap.id}
+                        className="border-b border-zinc-100 align-top last:border-b-0"
+                      >
+                        <td className="px-2 py-2 tabular-nums text-zinc-600">
+                          {i + 1}
+                        </td>
+                        <td className="px-2 py-2 font-medium text-black">
+                          {capabilityTitle(cap.id)}
+                        </td>
+                        <td className="px-2 py-2 text-sm leading-relaxed text-black">
+                          {capabilityDescription(levelForFramework, cap.id)}
+                        </td>
+                        <td className="px-2 py-2">
+                          {employeeEditable ? (
                             <RatingSelect
-                              value={managerCapDraft[i].managerRating}
+                              className="[&_span]:hidden"
+                              value={cap.selfRating}
                               onChange={(n) => {
-                                const next = [...managerCapDraft];
-                                next[i] = { ...next[i], managerRating: n };
-                                setManagerCapDraft(next);
+                                if (!draft) return;
+                                const caps = [...draft.capabilities];
+                                caps[i] = { ...caps[i], selfRating: n };
+                                setDraft({ ...draft, capabilities: caps });
                               }}
                             />
-                          ) : cap.managerRating != null ? (
-                            <RatingReadOnly value={cap.managerRating} />
                           ) : (
-                            <span className="text-sm text-zinc-400">—</span>
+                            <RatingReadOnly value={cap.selfRating} />
                           )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                        </td>
+                        {(isManager || appraisal.status !== "draft") && (
+                          <td className="px-2 py-2">
+                            {managerCanReview && managerCapDraft ? (
+                              <RatingSelect
+                                className="[&_span]:hidden"
+                                value={managerCapDraft[i].managerRating}
+                                onChange={(n) => {
+                                  const next = [...managerCapDraft];
+                                  next[i] = { ...next[i], managerRating: n };
+                                  setManagerCapDraft(next);
+                                }}
+                              />
+                            ) : cap.managerRating != null ? (
+                              <RatingReadOnly value={cap.managerRating} />
+                            ) : (
+                              <span className="text-sm text-zinc-400">—</span>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
               <div className="mt-4 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm">
                 <p>
@@ -805,12 +844,12 @@ function AppraisalDetailInner({
             )}
                   </section>
                 </div>
-                <div className="rounded-xl border border-zinc-200/80 bg-white p-6 shadow-sm">
-                  <CapabilityAppendixReference />
-                </div>
-                <div className="rounded-xl border border-zinc-200/80 bg-white p-6 shadow-sm">
-                  <PerformanceNineBoxReference />
-                </div>
+                {!managerWaiting && (
+                  <ReferenceGuideButtons
+                    onRatingLegend={() => setRatingLegendOpen(true)}
+                    onNineBox={() => setNineBoxModalOpen(true)}
+                  />
+                )}
               </>
             ) : activeTab === "kpi" ? (
               <>
@@ -830,8 +869,8 @@ function AppraisalDetailInner({
                 <RatingGuideModalTrigger label="Rating definitions" />
               </div>
               <p className="mb-4 text-sm text-zinc-600">
-                Up to {MAX_KPIS} KPIs: goals, weights (%), due dates, and
-                ratings. The KPI score below is{" "}
+                Up to {MAX_KPIS} KPIs in a list view: KRA, weight (%), due date,
+                and ratings. The KPI score below is{" "}
                 <strong>weighted</strong>: each row contributes{" "}
                 <strong>weight% × rating</strong>, summed and divided by total
                 weight% (1–5 scale).
@@ -850,166 +889,212 @@ function AppraisalDetailInner({
                     </span>
                   )}
               </div>
-              <div className="space-y-4">
-                {src.kpis.map((kpi, i) => (
-                  <div
-                    key={i}
-                    className="rounded-xl border border-zinc-200/80 bg-zinc-50/40 p-4"
-                  >
-                    <div className="mb-3 flex flex-wrap items-start justify-between gap-2">
-                      <span className="text-xs font-medium text-zinc-500">
-                        KPI {i + 1}
-                      </span>
-                      {employeeEditable && draft!.kpis.length > 1 && (
-                        <button
-                          type="button"
-                          className="text-xs text-red-600 hover:underline"
-                          onClick={() =>
-                            setDraft({
-                              ...draft!,
-                              kpis: draft!.kpis.filter((_, j) => j !== i),
-                            })
-                          }
-                        >
-                          Remove
-                        </button>
-                      )}
-                    </div>
-                    <div className="mb-3">
-                      <label className="mb-1 block text-xs font-medium text-zinc-600">
-                        Goals | KPIs
-                      </label>
-                      {employeeEditable ? (
-                        <textarea
-                          className={`${inputEnterprise} min-h-[80px] resize-y`}
-                          rows={3}
-                          value={kpi.goalsAndKpis}
-                          onChange={(e) => {
-                            if (!draft) return;
-                            const kpis = [...draft.kpis];
-                            kpis[i] = {
-                              ...kpis[i],
-                              goalsAndKpis: e.target.value,
-                            };
-                            setDraft({ ...draft, kpis });
-                          }}
+              <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
+                <table className="w-full min-w-4xl border-collapse text-left text-sm">
+                  <thead>
+                    <tr className="border-b border-zinc-200 bg-zinc-100 text-xs font-semibold uppercase tracking-wide text-zinc-700">
+                      <th className="w-10 px-2 py-2.5" scope="col">
+                        <span className="sr-only">Select</span>
+                        <input
+                          type="checkbox"
+                          disabled
+                          className="rounded border-zinc-300"
+                          aria-hidden
                         />
-                      ) : (
-                        <p className="whitespace-pre-wrap text-sm text-black">
-                          {kpi.goalsAndKpis || "—"}
-                        </p>
-                      )}
-                    </div>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-zinc-600">
-                          Weight (%) <span className="text-zinc-400">(required)</span>
-                        </label>
-                        {employeeEditable ? (
-                          <input
-                            type="number"
-                            min={0}
-                            max={100}
-                            className={`${inputEnterprise} ${
-                              (Number(kpi.weightPercent) || 0) <= 0
-                                ? "border-amber-400 focus:border-amber-500 focus:ring-amber-200"
-                                : ""
-                            }`}
-                            value={kpi.weightPercent || ""}
-                            onChange={(e) => {
-                              if (!draft) return;
-                              const kpis = [...draft.kpis];
-                              kpis[i] = {
-                                ...kpis[i],
-                                weightPercent: Number(e.target.value) || 0,
-                              };
-                              setDraft({ ...draft, kpis });
-                            }}
-                          />
-                        ) : (
-                          <p className="text-sm text-black">
-                            {kpi.weightPercent}%
-                          </p>
-                        )}
-                      </div>
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-zinc-600">
-                          Due date
-                        </label>
-                        {employeeEditable ? (
-                          <input
-                            type="date"
-                            className={inputEnterprise}
-                            value={kpi.dueDate}
-                            onChange={(e) => {
-                              if (!draft) return;
-                              const kpis = [...draft.kpis];
-                              kpis[i] = {
-                                ...kpis[i],
-                                dueDate: e.target.value,
-                              };
-                              setDraft({ ...draft, kpis });
-                            }}
-                          />
-                        ) : (
-                          <p className="text-sm text-black">
-                            {kpi.dueDate || "—"}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                    <div className="mt-4 grid gap-4 sm:grid-cols-2">
-                      <div>
-                        <label className="mb-1 block text-xs font-medium text-zinc-600">
-                          Employee self rating{" "}
-                          <span className="text-zinc-400">(required)</span>
-                        </label>
-                        {employeeEditable ? (
-                          <RatingSelect
-                            value={kpi.selfRating}
-                            onChange={(n) => {
-                              if (!draft) return;
-                              const kpis = [...draft.kpis];
-                              kpis[i] = { ...kpis[i], selfRating: n };
-                              setDraft({ ...draft, kpis });
-                            }}
-                          />
-                        ) : (
-                          <RatingReadOnly value={kpi.selfRating} />
-                        )}
-                      </div>
+                      </th>
+                      <th className="w-12 px-2 py-2.5" scope="col">
+                        No.
+                      </th>
+                      <th className="min-w-56 px-2 py-2.5" scope="col">
+                        KRA <span className="text-red-600">*</span>
+                      </th>
+                      <th className="w-24 px-2 py-2.5" scope="col">
+                        Weight (%) <span className="text-red-600">*</span>
+                      </th>
+                      <th className="w-36 px-2 py-2.5" scope="col">
+                        Due date
+                      </th>
+                      <th className="min-w-36 px-2 py-2.5" scope="col">
+                        Employee rating{" "}
+                        <span className="text-red-600">*</span>
+                      </th>
+                      <th className="w-32 px-2 py-2.5 text-right" scope="col">
+                        Goal score (weighted)
+                      </th>
                       {(isManager || appraisal.status !== "draft") && (
-                        <div>
-                          <label className="mb-1 block text-xs font-medium text-zinc-600">
-                            Manager rating{" "}
-                            {managerCanReview && (
-                              <span className="text-zinc-400">(required)</span>
-                            )}
-                          </label>
-                          {managerCanReview && managerKpiDraft ? (
-                            <RatingSelect
-                              value={managerKpiDraft[i].managerRating}
-                              onChange={(n) => {
-                                const next = [...managerKpiDraft];
-                                next[i] = { ...next[i], managerRating: n };
-                                setManagerKpiDraft(next);
+                        <th className="min-w-36 px-2 py-2.5" scope="col">
+                          Manager rating
+                          {managerCanReview && (
+                            <span className="text-red-600"> *</span>
+                          )}
+                        </th>
+                      )}
+                      {employeeEditable && (
+                        <th className="w-16 px-2 py-2.5" scope="col">
+                          <span className="sr-only">Actions</span>
+                        </th>
+                      )}
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {src.kpis.map((kpi, i) => (
+                      <tr
+                        key={i}
+                        className="border-b border-zinc-100 align-top last:border-b-0"
+                      >
+                        <td className="px-2 py-2">
+                          <input
+                            type="checkbox"
+                            disabled
+                            className="rounded border-zinc-300"
+                            aria-hidden
+                          />
+                        </td>
+                        <td className="px-2 py-2 tabular-nums text-zinc-600">
+                          {i + 1}
+                        </td>
+                        <td className="px-2 py-2">
+                          {employeeEditable ? (
+                            <textarea
+                              className={`${inputEnterprise} min-h-18 resize-y text-sm`}
+                              rows={3}
+                              value={kpi.goalsAndKpis}
+                              onChange={(e) => {
+                                if (!draft) return;
+                                const kpis = [...draft.kpis];
+                                kpis[i] = {
+                                  ...kpis[i],
+                                  goalsAndKpis: e.target.value,
+                                };
+                                setDraft({ ...draft, kpis });
                               }}
                             />
-                          ) : kpi.managerRating != null ? (
-                            <RatingReadOnly value={kpi.managerRating} />
                           ) : (
-                            <span className="text-sm text-zinc-400">—</span>
+                            <p className="whitespace-pre-wrap text-sm text-black">
+                              {kpi.goalsAndKpis || "—"}
+                            </p>
                           )}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                ))}
+                        </td>
+                        <td className="px-2 py-2">
+                          {employeeEditable ? (
+                            <input
+                              type="number"
+                              min={0}
+                              max={100}
+                              className={`w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm text-black shadow-sm outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-200 ${
+                                (Number(kpi.weightPercent) || 0) <= 0
+                                  ? "border-amber-400 focus:border-amber-500 focus:ring-amber-200"
+                                  : ""
+                              }`}
+                              value={kpi.weightPercent || ""}
+                              onChange={(e) => {
+                                if (!draft) return;
+                                const kpis = [...draft.kpis];
+                                kpis[i] = {
+                                  ...kpis[i],
+                                  weightPercent: Number(e.target.value) || 0,
+                                };
+                                setDraft({ ...draft, kpis });
+                              }}
+                            />
+                          ) : (
+                            <span className="tabular-nums text-black">
+                              {kpi.weightPercent}%
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-2 py-2">
+                          {employeeEditable ? (
+                            <input
+                              type="date"
+                              className="w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm text-black shadow-sm outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-200"
+                              value={kpi.dueDate}
+                              onChange={(e) => {
+                                if (!draft) return;
+                                const kpis = [...draft.kpis];
+                                kpis[i] = {
+                                  ...kpis[i],
+                                  dueDate: e.target.value,
+                                };
+                                setDraft({ ...draft, kpis });
+                              }}
+                            />
+                          ) : (
+                            <span className="text-black">
+                              {kpi.dueDate || "—"}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-2 py-2">
+                          {employeeEditable ? (
+                            <RatingSelect
+                              className="[&_span]:hidden"
+                              value={kpi.selfRating}
+                              onChange={(n) => {
+                                if (!draft) return;
+                                const kpis = [...draft.kpis];
+                                kpis[i] = { ...kpis[i], selfRating: n };
+                                setDraft({ ...draft, kpis });
+                              }}
+                            />
+                          ) : (
+                            <RatingReadOnly value={kpi.selfRating} />
+                          )}
+                        </td>
+                        <td className="px-2 py-2 text-right font-mono text-xs text-zinc-700">
+                          {formatKpiRowWeightedGoalScore(
+                            kpi.weightPercent,
+                            kpi.selfRating
+                          )}
+                        </td>
+                        {(isManager || appraisal.status !== "draft") && (
+                          <td className="px-2 py-2">
+                            {managerCanReview && managerKpiDraft ? (
+                              <RatingSelect
+                                className="[&_span]:hidden"
+                                value={managerKpiDraft[i].managerRating}
+                                onChange={(n) => {
+                                  const next = [...managerKpiDraft];
+                                  next[i] = { ...next[i], managerRating: n };
+                                  setManagerKpiDraft(next);
+                                }}
+                              />
+                            ) : kpi.managerRating != null ? (
+                              <RatingReadOnly value={kpi.managerRating} />
+                            ) : (
+                              <span className="text-sm text-zinc-400">—</span>
+                            )}
+                          </td>
+                        )}
+                        {employeeEditable && (
+                          <td className="px-2 py-2 text-center">
+                            {draft!.kpis.length > 1 ? (
+                              <button
+                                type="button"
+                                className="text-xs font-medium text-red-600 hover:underline"
+                                onClick={() =>
+                                  setDraft({
+                                    ...draft!,
+                                    kpis: draft!.kpis.filter((_, j) => j !== i),
+                                  })
+                                }
+                              >
+                                Remove
+                              </button>
+                            ) : (
+                              <span className="text-zinc-300">—</span>
+                            )}
+                          </td>
+                        )}
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               </div>
               {employeeEditable && draft!.kpis.length < MAX_KPIS && (
                 <button
                   type="button"
-                  className="mt-4 text-sm font-medium text-black underline"
+                  className="mt-2 rounded border border-zinc-200 bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-800 shadow-sm hover:bg-zinc-200/80"
                   onClick={() =>
                     setDraft({
                       ...draft!,
@@ -1017,7 +1102,7 @@ function AppraisalDetailInner({
                     })
                   }
                 >
-                  + Add KPI ({draft!.kpis.length}/{MAX_KPIS})
+                  Add Row ({draft!.kpis.length}/{MAX_KPIS})
                 </button>
               )}
               <div className="mt-4 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm">
@@ -1043,9 +1128,12 @@ function AppraisalDetailInner({
               )}
             </section>
                 </div>
-                <div className="rounded-xl border border-zinc-200/80 bg-white p-6 shadow-sm">
-                  <PerformanceNineBoxReference />
-                </div>
+                {!managerWaiting && (
+                  <ReferenceGuideButtons
+                    onRatingLegend={() => setRatingLegendOpen(true)}
+                    onNineBox={() => setNineBoxModalOpen(true)}
+                  />
+                )}
               </>
             ) : (
             <div className="rounded-xl border border-zinc-200/80 bg-white p-6 shadow-sm">
@@ -1278,6 +1366,14 @@ function AppraisalDetailInner({
                   )}
                 </div>
               </div>
+              {!managerWaiting && (
+                <div className="mt-8 border-t border-zinc-200 pt-5">
+                  <ReferenceGuideButtons
+                    onRatingLegend={() => setRatingLegendOpen(true)}
+                    onNineBox={() => setNineBoxModalOpen(true)}
+                  />
+                </div>
+              )}
             </section>
             )}
             </div>
@@ -1291,19 +1387,51 @@ function AppraisalDetailInner({
             )}
           </div>
 
-          {(activeTab === "kpi" ||
-            activeTab === "capability" ||
-            activeTab === "overall") &&
-            !managerWaiting && (
-          <div className="shrink-0 lg:w-64">
-            <RatingLegend />
-            <p className="mt-4 text-xs text-zinc-500">
-              A suggested 9-point grid reference appears below the KPI and
-              Capability sections on those tabs.
-            </p>
-          </div>
-            )}
         </div>
+      </div>
+      <RatingLegendModal
+        open={ratingLegendOpen}
+        onClose={() => setRatingLegendOpen(false)}
+      />
+      <PerformanceNineBoxModal
+        open={nineBoxModalOpen}
+        onClose={() => setNineBoxModalOpen(false)}
+      />
+      <CapabilityAppendixModal
+        open={capabilityAppendixOpen}
+        onClose={() => setCapabilityAppendixOpen(false)}
+      />
+    </div>
+  );
+}
+
+function ReferenceGuideButtons({
+  onRatingLegend,
+  onNineBox,
+}: {
+  onRatingLegend: () => void;
+  onNineBox: () => void;
+}) {
+  return (
+    <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:gap-3">
+      <p className="text-xs text-zinc-500 sm:mr-auto">
+        Optional reference (not part of your submitted rating).
+      </p>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={onRatingLegend}
+          className="rounded border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-800 shadow-sm hover:bg-zinc-50"
+        >
+          Suggested performance ratings (1–5)
+        </button>
+        <button
+          type="button"
+          onClick={onNineBox}
+          className="rounded border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-800 shadow-sm hover:bg-zinc-50"
+        >
+          9-point performance grid
+        </button>
       </div>
     </div>
   );

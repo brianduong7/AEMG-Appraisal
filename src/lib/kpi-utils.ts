@@ -29,6 +29,17 @@ export function weightedKpiScore(
   return weightedSum / weightTotal;
 }
 
+/** Display (weight% × rating) / 100 for a single KPI row; "—" if incomplete. */
+export function formatKpiRowWeightedGoalScore(
+  weightPercent: number,
+  rating: number | null | undefined
+): string {
+  if (rating == null || Number.isNaN(rating)) return "—";
+  const w = Math.max(0, Number(weightPercent) || 0);
+  if (w <= 0) return "—";
+  return ((w * rating) / 100).toFixed(3);
+}
+
 export function averageCapabilityRating(
   ratings: number[]
 ): number | null {
