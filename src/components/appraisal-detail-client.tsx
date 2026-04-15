@@ -423,6 +423,10 @@ function AppraisalDetailInner({
     managerKpiDraft != null &&
     managerCapDraft != null;
 
+  /** Reference guides: hidden for employee/manager; shown only to HR after send-to-HR (completed). */
+  const showAppraisalReferenceTools =
+    isHr && appraisal.status === "completed";
+
   const kpiMgrScore = useMemo(() => {
     if (
       managerCanReview &&
@@ -809,20 +813,23 @@ function AppraisalDetailInner({
                 <h2 className="text-lg font-semibold text-black">
                   Capability and skill development
                 </h2>
-                <RatingGuideModalTrigger label="Rating definitions" />
+                <RatingGuideModalTrigger label="Performance ratings (1–5) definitions" />
               </div>
               <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
                 <p className="text-sm text-zinc-600">
-                  Descriptions are prefilled for your M level. Open the appendix
-                  for the full M1–M10 framework.
+                  {showAppraisalReferenceTools
+                    ? "Descriptions are prefilled for your M level. Open the appendix for the full M1–M10 framework."
+                    : "Descriptions are prefilled for your M level."}
                 </p>
-                <button
-                  type="button"
-                  onClick={() => setCapabilityAppendixOpen(true)}
-                  className="shrink-0 rounded border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-800 shadow-sm hover:bg-zinc-50"
-                >
-                  Appendix 1 — AEMG Capability Framework
-                </button>
+                {showAppraisalReferenceTools && (
+                  <button
+                    type="button"
+                    onClick={() => setCapabilityAppendixOpen(true)}
+                    className="shrink-0 rounded border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-800 shadow-sm hover:bg-zinc-50"
+                  >
+                    Appendix 1 — AEMG Capability Framework
+                  </button>
+                )}
               </div>
               <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
                 <table className="w-full min-w-4xl border-collapse text-left text-sm">
@@ -926,7 +933,7 @@ function AppraisalDetailInner({
             )}
                   </section>
                 </div>
-                {!managerWaiting && (
+                {showAppraisalReferenceTools && !managerWaiting && (
                   <ReferenceGuideButtons
                     onRatingLegend={() => setRatingLegendOpen(true)}
                     onNineBox={() => setNineBoxModalOpen(true)}
@@ -948,7 +955,7 @@ function AppraisalDetailInner({
                 <h2 className="text-lg font-semibold text-black">
                   Key Performance Indicators
                 </h2>
-                <RatingGuideModalTrigger label="Rating definitions" />
+                <RatingGuideModalTrigger label="Performance ratings (1–5) definitions" />
               </div>
               <p className="mb-4 text-sm text-zinc-600">
                 Up to {MAX_KPIS} KPIs in a list view: KPI, weight (%), due date,
@@ -1201,7 +1208,7 @@ function AppraisalDetailInner({
               )}
             </section>
                 </div>
-                {!managerWaiting && (
+                {showAppraisalReferenceTools && !managerWaiting && (
                   <ReferenceGuideButtons
                     onRatingLegend={() => setRatingLegendOpen(true)}
                     onNineBox={() => setNineBoxModalOpen(true)}
@@ -1442,7 +1449,7 @@ function AppraisalDetailInner({
                   )}
                 </div>
               </div>
-              {!managerWaiting && (
+              {showAppraisalReferenceTools && !managerWaiting && (
                 <div className="mt-8 border-t border-zinc-200 pt-5">
                   <ReferenceGuideButtons
                     onRatingLegend={() => setRatingLegendOpen(true)}
