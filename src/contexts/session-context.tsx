@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import {
+  DEMO_HR,
   DEMO_MANAGER,
   findMockUser,
   type MockUser,
@@ -18,7 +19,7 @@ const USER_KEY = "aemg-appraisal-user-id";
 const MODE_KEY = "aemg-session-mode";
 const MANAGER_ID_KEY = "aemg-manager-id";
 
-export type SessionMode = "employee" | "manager";
+export type SessionMode = "employee" | "manager" | "hr";
 
 export type ManagerProfile = {
   id: string;
@@ -32,10 +33,14 @@ type SessionContextValue = {
   user: MockUser | null;
   /** Set when `mode === "manager"` (demo: Mark). */
   managerProfile: ManagerProfile | null;
+  /** Set when `mode === "hr"` (demo inbox). */
+  hrProfile: ManagerProfile | null;
   /** Employee: own appraisal only. */
   loginEmployee: (userId: string) => void;
   /** Manager demo: Mark reviews direct reports in-app. */
   loginManager: () => void;
+  /** HR demo: view appraisals sent by managers. */
+  loginHr: () => void;
   logout: () => void;
   isAuthenticated: boolean;
 };
@@ -49,6 +54,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const [managerProfile, setManagerProfile] = useState<ManagerProfile | null>(
     null
   );
+  const [hrProfile, setHrProfile] = useState<ManagerProfile | null>(null);
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -62,15 +68,25 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         if (m === "manager") {
           setMode("manager");
           setUser(null);
+          setHrProfile(null);
           setManagerProfile({
             id: DEMO_MANAGER.id,
             displayName: DEMO_MANAGER.displayName,
+          });
+        } else if (m === "hr") {
+          setMode("hr");
+          setUser(null);
+          setManagerProfile(null);
+          setHrProfile({
+            id: DEMO_HR.id,
+            displayName: DEMO_HR.displayName,
           });
         } else if (m === "employee") {
           const u = id ? findMockUser(id) : undefined;
           setMode("employee");
           setUser(u ?? null);
           setManagerProfile(null);
+          setHrProfile(null);
         }
       } catch {
         /* ignore */
@@ -85,6 +101,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setMode("employee");
     setUser(u);
     setManagerProfile(null);
+    setHrProfile(null);
     try {
       localStorage.setItem(MODE_KEY, "employee");
       localStorage.setItem(USER_KEY, userId);
@@ -101,9 +118,27 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       id: DEMO_MANAGER.id,
       displayName: DEMO_MANAGER.displayName,
     });
+    setHrProfile(null);
     try {
       localStorage.setItem(MODE_KEY, "manager");
       localStorage.setItem(MANAGER_ID_KEY, DEMO_MANAGER.id);
+      localStorage.removeItem(USER_KEY);
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
+  const loginHr = useCallback(() => {
+    setMode("hr");
+    setUser(null);
+    setManagerProfile(null);
+    setHrProfile({
+      id: DEMO_HR.id,
+      displayName: DEMO_HR.displayName,
+    });
+    try {
+      localStorage.setItem(MODE_KEY, "hr");
+      localStorage.setItem(MANAGER_ID_KEY, DEMO_HR.id);
       localStorage.removeItem(USER_KEY);
     } catch {
       /* ignore */
@@ -114,6 +149,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setMode(null);
     setUser(null);
     setManagerProfile(null);
+    setHrProfile(null);
     try {
       localStorage.removeItem(MODE_KEY);
       localStorage.removeItem(USER_KEY);
@@ -123,7 +159,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     }
   }, []);
 
-  const isAuthenticated = mode === "manager" || (mode === "employee" && user != null);
+  const isAuthenticated =
+    mode === "manager" ||
+    mode === "hr" ||
+    (mode === "employee" && user != null);
 
   const value = useMemo(
     () => ({
@@ -131,8 +170,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       mode,
       user,
       managerProfile,
+      hrProfile,
       loginEmployee,
       loginManager,
+      loginHr,
       logout,
       isAuthenticated,
     }),
@@ -141,8 +182,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       mode,
       user,
       managerProfile,
+      hrProfile,
       loginEmployee,
       loginManager,
+      loginHr,
       logout,
       isAuthenticated,
     ]

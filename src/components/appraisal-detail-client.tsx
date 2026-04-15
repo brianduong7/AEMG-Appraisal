@@ -57,7 +57,7 @@ function emptyKpi(): KpiRow {
 
 function initialDraftForRole(
   appraisal: Appraisal,
-  role: "employee" | "manager"
+  role: "employee" | "manager" | "hr"
 ): Appraisal | null {
   if (appraisal.status === "draft" && role === "employee") {
     return cloneAppraisal(appraisal);
@@ -91,21 +91,18 @@ export function AppraisalDetailClient({
   }, [mode, user, router]);
 
   useEffect(() => {
+    let cancelled = false;
+
     if (initialAppraisal) {
       setAppraisal(initialAppraisal);
       setLoadState("ready");
-      return;
+    } else {
+      setLoadState("loading");
     }
-    let cancelled = false;
+
     (async () => {
-      const fromSession = readAppraisalBootstrap(id);
-      if (!cancelled && fromSession?.id === id) {
-        setAppraisal(fromSession);
-        setLoadState("ready");
-        return;
-      }
       try {
-        const res = await fetch(`/api/appraisals/${id}`);
+        const res = await fetch(`/api/appraisals/${id}`, { cache: "no-store" });
         if (!cancelled && res.ok) {
           const data = (await res.json()) as Appraisal;
           setAppraisal(data);
@@ -116,8 +113,26 @@ export function AppraisalDetailClient({
       } catch {
         /* ignore */
       }
-      if (!cancelled) setLoadState("notfound");
+
+      if (cancelled) return;
+
+      if (initialAppraisal) {
+        setAppraisal(initialAppraisal);
+        saveAppraisalBootstrap(initialAppraisal);
+        setLoadState("ready");
+        return;
+      }
+
+      const fromSession = readAppraisalBootstrap(id);
+      if (fromSession?.id === id) {
+        setAppraisal(fromSession);
+        setLoadState("ready");
+        return;
+      }
+
+      setLoadState("notfound");
     })();
+
     return () => {
       cancelled = true;
     };
@@ -176,12 +191,13 @@ function AppraisalDetailInner({
   appraisal: Appraisal;
   setAppraisal: (next: Appraisal) => void;
 }) {
-  const { user, mode, managerProfile } = useSession();
+  const { user, mode, managerProfile, hrProfile } = useSession();
   const { role, setRole } = useRole();
 
   useEffect(() => {
     if (mode === "employee") setRole("employee");
     if (mode === "manager") setRole("manager");
+    if (mode === "hr") setRole("hr");
   }, [mode, setRole]);
 
   const [busy, setBusy] = useState(false);
@@ -325,6 +341,33 @@ function AppraisalDetailInner({
     }
   }
 
+  async function completeAppraisalToHr() {
+    setBusy(true);
+    setFormError(null);
+    try {
+      const res = await fetch(`/api/appraisals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "manager_complete" }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setFormError(
+          typeof body?.error === "string" ? body.error : "Request failed."
+        );
+        return;
+      }
+      const next = body as Appraisal;
+      setAppraisal(next);
+      saveAppraisalBootstrap(next);
+      setCompleteAppraisalDemoBanner(true);
+    } catch {
+      setFormError("Network error.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function submitManagerReview() {
     if (!managerKpiDraft || !managerCapDraft || !appraisal) return;
     if (!managerSubmitReady) {
@@ -367,9 +410,12 @@ function AppraisalDetailInner({
 
   const isEmployee = role === "employee";
   const isManager = role === "manager";
+  const isHr = role === "hr";
   const employeeReadOnlyEmployee =
     isEmployee &&
-    (appraisal.status === "submitted" || appraisal.status === "reviewed");
+    (appraisal.status === "submitted" ||
+      appraisal.status === "reviewed" ||
+      appraisal.status === "completed");
   const managerWaiting = isManager && appraisal.status === "draft";
   const managerCanReview =
     isManager &&
@@ -422,15 +468,22 @@ function AppraisalDetailInner({
             className:
               "rounded-md bg-sky-100 px-2.5 py-0.5 text-xs font-semibold text-sky-900",
           }
-        : {
-            label: "Reviewed",
-            className:
-              "rounded-md bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-900",
-          };
+        : appraisal.status === "reviewed"
+          ? {
+              label: "Reviewed",
+              className:
+                "rounded-md bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-900",
+            }
+          : {
+              label: "Completed",
+              className:
+                "rounded-md bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-900",
+            };
 
   const chromeInitial =
     (mode === "employee" && user?.employeeName?.[0]?.toUpperCase()) ||
     (mode === "manager" && managerProfile?.displayName?.[0]?.toUpperCase()) ||
+    (mode === "hr" && hrProfile?.displayName?.[0]?.toUpperCase()) ||
     "A";
 
   const inputEnterprise =
@@ -489,6 +542,23 @@ function AppraisalDetailInner({
         <p className="text-sm text-black">
           This appraisal belongs to another employee. Switch account or open your
           own plan from the home list.
+        </p>
+        <Link
+          href="/"
+          className="mt-4 inline-block text-sm font-medium text-black underline"
+        >
+          ← Home
+        </Link>
+      </div>
+    );
+  }
+
+  if (mode === "hr" && appraisal.status !== "completed") {
+    return (
+      <div className="mx-auto max-w-lg flex-1 px-4 py-16">
+        <p className="text-sm text-black">
+          HR can only open appraisals that the manager has completed and sent to
+          HR. This appraisal is not in that state yet.
         </p>
         <Link
           href="/"
@@ -589,9 +659,8 @@ function AppraisalDetailInner({
           className="mb-6 rounded-lg border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-950"
           role="status"
         >
-          <strong>Appraisal complete.</strong> In a live HR system this would
-          close the cycle (e.g. lock records, trigger payroll or talent steps).
-          This demo does not store anything further.
+          <strong>Sent to HR.</strong> This appraisal is locked — it cannot be
+          edited by the employee or manager anymore.
         </div>
       )}
 
@@ -603,7 +672,8 @@ function AppraisalDetailInner({
             </h1>
             <span className={statusBadge.className}>{statusBadge.label}</span>
             <span className="text-xs text-zinc-500">
-              {isEmployee ? "Employee" : "Manager"} · {identity.employeeName}
+              {isEmployee ? "Employee" : isHr ? "HR" : "Manager"} ·{" "}
+              {identity.employeeName}
             </span>
           </div>
           <p className="mt-1 text-xs text-zinc-500">
@@ -612,7 +682,20 @@ function AppraisalDetailInner({
           </p>
           {mode === "employee" && employeeReadOnlyEmployee && (
             <p className="mt-2 text-sm text-zinc-600">
-              <strong>View only</strong> — submitted appraisals cannot be changed.
+              <strong>View only</strong> — submitted or finalized appraisals
+              cannot be changed.
+            </p>
+          )}
+          {mode === "manager" && appraisal.status === "completed" && (
+            <p className="mt-2 text-sm text-zinc-600">
+              <strong>View only</strong> — this appraisal was sent to HR and
+              cannot be edited.
+            </p>
+          )}
+          {mode === "hr" && (
+            <p className="mt-2 text-sm text-zinc-600">
+              <strong>HR view</strong> — read-only record as received from the
+              manager.
             </p>
           )}
         </div>
@@ -664,7 +747,7 @@ function AppraisalDetailInner({
                   type="button"
                   disabled={busy}
                   className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-black shadow-sm disabled:opacity-50"
-                  onClick={() => setCompleteAppraisalDemoBanner(true)}
+                  onClick={() => void completeAppraisalToHr()}
                 >
                   Complete Appraisal
                 </button>
@@ -1243,11 +1326,12 @@ function AppraisalDetailInner({
                     : "—"}
                 </p>
 
-                {isManager && !managerWaiting && (
+                {(isManager || isHr) && !managerWaiting && (
                   <div className="mt-4 border-t border-zinc-200 pt-4">
                     <p className="text-sm text-zinc-600">
-                      Manager view: figures below use your ratings from the KPI and
-                      Capability tabs (including while you complete the review).
+                      {isHr
+                        ? "Figures below reflect the manager’s final ratings from the KPI and Capability tabs."
+                        : "Manager view: figures below use your ratings from the KPI and Capability tabs (including while you complete the review)."}
                     </p>
                     <p className="mt-3 text-sm text-black">
                       <span className="font-medium">
@@ -1283,7 +1367,9 @@ function AppraisalDetailInner({
                       className="cursor-not-allowed rounded-lg border border-zinc-200 bg-zinc-100 px-3 py-2.5 text-sm text-zinc-600 select-none"
                       aria-readonly="true"
                     >
-                      {appraisal.status === "reviewed" && overallMgr != null
+                      {(appraisal.status === "reviewed" ||
+                        appraisal.status === "completed") &&
+                      overallMgr != null
                         ? ratingLabel(Math.min(5, Math.max(1, Math.round(overallMgr))))
                         : "Not yet available — your manager records this after you submit your appraisal."}
                     </div>

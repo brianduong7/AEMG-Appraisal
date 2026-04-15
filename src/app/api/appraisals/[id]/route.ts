@@ -312,5 +312,28 @@ export async function PATCH(
     return NextResponse.json(next);
   }
 
+  if (action === "manager_complete") {
+    const next = await updateAppraisal(id, (current) => {
+      if (current.status !== "reviewed") {
+        return null;
+      }
+      return {
+        ...current,
+        status: "completed" as const,
+      };
+    });
+
+    if (!next) {
+      return NextResponse.json(
+        {
+          error:
+            "Cannot complete: appraisal must be reviewed by the manager first.",
+        },
+        { status: 409 }
+      );
+    }
+    return NextResponse.json(next);
+  }
+
   return NextResponse.json({ error: "Unknown action" }, { status: 400 });
 }

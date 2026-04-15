@@ -54,6 +54,12 @@ export const DEMO_MANAGER = {
   displayName: "Mark",
 } as const;
 
+/** Demo HR login — sees appraisals after the manager completes and sends to HR. */
+export const DEMO_HR = {
+  id: "hr",
+  displayName: "HR",
+} as const;
+
 export type EmploymentProfile = Pick<
   Appraisal,
   | "employeeName"

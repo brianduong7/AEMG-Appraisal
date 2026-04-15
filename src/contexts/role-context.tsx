@@ -8,7 +8,7 @@ import {
   useState,
 } from "react";
 
-export type Role = "employee" | "manager";
+export type Role = "employee" | "manager" | "hr";
 
 const STORAGE_KEY = "aemg-appraisal-role";
 
@@ -26,7 +26,11 @@ export function RoleProvider({ children }: { children: React.ReactNode }) {
     queueMicrotask(() => {
       try {
         const stored = localStorage.getItem(STORAGE_KEY) as Role | null;
-        if (stored === "employee" || stored === "manager") {
+        if (
+          stored === "employee" ||
+          stored === "manager" ||
+          stored === "hr"
+        ) {
           setRoleState(stored);
         }
       } catch {

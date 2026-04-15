@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
-import { DEMO_MANAGER, findMockUser } from "@/lib/mock-users";
+import { DEMO_HR, DEMO_MANAGER, findMockUser } from "@/lib/mock-users";
 import { useSession } from "@/contexts/session-context";
 
 const EMMA_ID = "emma" as const;
@@ -10,6 +10,7 @@ const EMMA_ID = "emma" as const;
 /** Shown in the grey box and accepted on Login (password ignored for demo). */
 const DEMO_EMPLOYEE_EMAIL = "emma@aemg.demo";
 const DEMO_MANAGER_EMAIL = "mark@aemg.demo";
+const DEMO_HR_EMAIL = "hr@aemg.demo";
 
 function MailIcon({ className }: { className?: string }) {
   return (
@@ -52,7 +53,7 @@ function LockIcon({ className }: { className?: string }) {
 }
 
 export function LoginContent() {
-  const { loginEmployee, loginManager } = useSession();
+  const { loginEmployee, loginManager, loginHr } = useSession();
   const emma = findMockUser(EMMA_ID);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -69,6 +70,10 @@ export function LoginContent() {
     }
     if (normalized === DEMO_MANAGER_EMAIL.toLowerCase()) {
       loginManager();
+      return;
+    }
+    if (normalized === DEMO_HR_EMAIL.toLowerCase()) {
+      loginHr();
       return;
     }
     setError(
@@ -196,6 +201,15 @@ export function LoginContent() {
               </span>
               <div className="mt-1 font-mono text-[11px] text-zinc-600">
                 <div>Email: {DEMO_MANAGER_EMAIL}</div>
+                <div>Password: any (not checked)</div>
+              </div>
+            </li>
+            <li className="border-t border-zinc-300/80 pt-3">
+              <span className="font-medium text-zinc-900">
+                {DEMO_HR.displayName} (HR)
+              </span>
+              <div className="mt-1 font-mono text-[11px] text-zinc-600">
+                <div>Email: {DEMO_HR_EMAIL}</div>
                 <div>Password: any (not checked)</div>
               </div>
             </li>

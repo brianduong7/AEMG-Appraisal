@@ -1,4 +1,9 @@
-export type AppraisalStatus = "draft" | "submitted" | "reviewed";
+export type AppraisalStatus =
+  | "draft"
+  | "submitted"
+  | "reviewed"
+  /** Manager finalized and sent to HR; record is locked. */
+  | "completed";
 
 /** Matches form column “Goals | KPIs”. */
 export type KpiRow = {

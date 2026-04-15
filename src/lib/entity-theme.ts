@@ -1,7 +1,7 @@
 import type { Appraisal } from "./types";
 import { findMockUser, type MockUser } from "./mock-users";
 
-export type SessionModeForDisplay = "employee" | "manager";
+export type SessionModeForDisplay = "employee" | "manager" | "hr";
 
 /**
  * List row label: prefer directory profile over stored `employeeName`, which can

@@ -157,7 +157,10 @@ export function migrateAppraisal(raw: unknown): Appraisal {
     managerName: String(a.managerName ?? ""),
     entity,
     status:
-      a.status === "submitted" || a.status === "reviewed" || a.status === "draft"
+      a.status === "submitted" ||
+      a.status === "reviewed" ||
+      a.status === "completed" ||
+      a.status === "draft"
         ? a.status
         : "draft",
     kpis:

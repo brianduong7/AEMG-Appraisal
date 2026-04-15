@@ -17,6 +17,8 @@ function statusBadge(status: Appraisal["status"]) {
     draft: "border border-red-200 bg-red-50 text-red-700",
     submitted: "border border-sky-200 bg-sky-50 text-sky-800",
     reviewed: "border border-emerald-200 bg-emerald-50 text-emerald-800",
+    completed:
+      "border border-violet-200 bg-violet-50 text-violet-900",
   };
   return map[status];
 }
@@ -51,7 +53,7 @@ type ManagerNotification = {
 
 export function HomeContent() {
   const router = useRouter();
-  const { user, logout, mode, managerProfile } = useSession();
+  const { user, logout, mode, managerProfile, hrProfile } = useSession();
   const { setRole } = useRole();
   const searchParams = useSearchParams();
   const notice = searchParams.get("notice");
@@ -89,6 +91,7 @@ export function HomeContent() {
   useEffect(() => {
     if (mode === "employee") setRole("employee");
     if (mode === "manager") setRole("manager");
+    if (mode === "hr") setRole("hr");
   }, [mode, setRole]);
 
   useEffect(() => {
@@ -156,17 +159,23 @@ export function HomeContent() {
         (a) => !a.ownerUserId || a.ownerUserId === user.id
       );
     }
+    if (mode === "hr") {
+      return list.filter((a) => a.status === "completed");
+    }
     return list;
   }, [list, mode, user]);
 
   const sessionLabel =
-    mode === "manager" && managerProfile
-      ? `${managerProfile.displayName} (manager)`
-      : user?.employeeName ?? "Employee";
+    mode === "hr" && hrProfile
+      ? `${hrProfile.displayName} (HR)`
+      : mode === "manager" && managerProfile
+        ? `${managerProfile.displayName} (manager)`
+        : user?.employeeName ?? "Employee";
 
   const chromeInitial =
     (mode === "employee" && user?.employeeName?.[0]?.toUpperCase()) ||
     (mode === "manager" && managerProfile?.displayName?.[0]?.toUpperCase()) ||
+    (mode === "hr" && hrProfile?.displayName?.[0]?.toUpperCase()) ||
     "A";
 
   const cycleYear = useMemo(() => new Date().getFullYear(), []);
@@ -485,6 +494,13 @@ export function HomeContent() {
                     and use notifications for plans waiting on you.
                   </>
                 )}
+                {mode === "hr" && (
+                  <>
+                    Appraisals appear here after a manager finishes the review
+                    and clicks <strong>Complete Appraisal</strong> (sent to HR).
+                    Records are read-only.
+                  </>
+                )}
               </p>
 
               {mode === "manager" && (
@@ -555,7 +571,11 @@ export function HomeContent() {
 
               <section aria-label="Appraisal list">
                 <h2 className="mb-2 text-xs font-semibold uppercase tracking-wide text-zinc-500">
-                  {mode === "employee" ? "Your appraisals" : "All appraisals"}
+                  {mode === "employee"
+                    ? "Your appraisals"
+                    : mode === "hr"
+                      ? "Received from managers"
+                      : "All appraisals"}
                 </h2>
                 {error && (
                   <p className="text-sm text-red-600">{error}</p>
@@ -565,25 +585,34 @@ export function HomeContent() {
                 )}
                 {list && list.length === 0 && (
                   <div className="rounded border border-dashed border-zinc-200 bg-white px-6 py-12 text-center">
-                    <p className="text-sm text-zinc-600">
-                      You haven&apos;t created an appraisal yet.
-                    </p>
-                    {mode === "employee" && user ? (
-                      <button
-                        type="button"
-                        disabled={createBusy}
-                        className="mt-4 rounded border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-black disabled:cursor-not-allowed disabled:opacity-50"
-                        onClick={() => createAppraisalForOwner(user.id)}
-                      >
-                        {createBusy
-                          ? "Creating…"
-                          : "Create your first appraisal"}
-                      </button>
-                    ) : (
-                      <p className="mt-4 text-xs text-zinc-500">
-                        Use <strong>+ Add Appraisal</strong> above after
-                        choosing an employee.
+                    {mode === "hr" ? (
+                      <p className="text-sm text-zinc-600">
+                        No appraisals on the server yet, or none have been
+                        completed and sent to HR.
                       </p>
+                    ) : (
+                      <>
+                        <p className="text-sm text-zinc-600">
+                          You haven&apos;t created an appraisal yet.
+                        </p>
+                        {mode === "employee" && user ? (
+                          <button
+                            type="button"
+                            disabled={createBusy}
+                            className="mt-4 rounded border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-black disabled:cursor-not-allowed disabled:opacity-50"
+                            onClick={() => createAppraisalForOwner(user.id)}
+                          >
+                            {createBusy
+                              ? "Creating…"
+                              : "Create your first appraisal"}
+                          </button>
+                        ) : (
+                          <p className="mt-4 text-xs text-zinc-500">
+                            Use <strong>+ Add Appraisal</strong> above after
+                            choosing an employee.
+                          </p>
+                        )}
+                      </>
                     )}
                   </div>
                 )}
@@ -595,6 +624,17 @@ export function HomeContent() {
                     <p className="text-sm text-zinc-600">
                       No appraisal is assigned to your account. Create one
                       above or sign in as another demo employee.
+                    </p>
+                  )}
+                {visibleAppraisals &&
+                  list &&
+                  list.length > 0 &&
+                  visibleAppraisals.length === 0 &&
+                  mode === "hr" && (
+                    <p className="text-sm text-zinc-600">
+                      Nothing has been sent to HR yet. When a manager finishes a
+                      review and clicks <strong>Complete Appraisal</strong>,
+                      it will appear here.
                     </p>
                   )}
                 {visibleAppraisals && visibleAppraisals.length > 0 && (
