@@ -167,6 +167,11 @@ export function HomeContent() {
     return list;
   }, [list, mode, user]);
 
+  const reviewedAwaitingHr = useMemo(() => {
+    if (!list || mode !== "hr") return 0;
+    return list.filter((a) => a.status === "reviewed").length;
+  }, [list, mode]);
+
   const sessionLabel =
     mode === "hr" && hrProfile
       ? `${hrProfile.displayName} (HR)`
@@ -563,6 +568,28 @@ export function HomeContent() {
                     ))}
                   </ul>
                 </section>
+              )}
+
+              {mode === "hr" && reviewedAwaitingHr > 0 && (
+                <div
+                  className="mb-4 rounded border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-950"
+                  role="status"
+                >
+                  {reviewedAwaitingHr === 1 ? (
+                    <>
+                      <strong>1 appraisal</strong> has a manager review but has
+                      not been sent to HR yet. Sign in as the manager and click{" "}
+                      <strong>Complete Appraisal</strong> on that record.
+                    </>
+                  ) : (
+                    <>
+                      <strong>{reviewedAwaitingHr} appraisals</strong> have
+                      manager reviews but have not been sent to HR yet. The
+                      manager must click <strong>Complete Appraisal</strong> on
+                      each one.
+                    </>
+                  )}
+                </div>
               )}
 
               <section aria-label="Appraisal list">

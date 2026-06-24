@@ -6,10 +6,13 @@ const DATA_DIR = path.join(process.cwd(), "data");
 const DATA_FILE = path.join(DATA_DIR, "notifications.json");
 
 /**
- * Default: in-memory only (no disk writes). Use APPRAISAL_STORE=file with the
- * appraisal store for local JSON persistence.
+ * Default: file store in local development; in-memory on serverless unless
+ * APPRAISAL_STORE=file. Set APPRAISAL_STORE=memory to force in-memory in dev.
  */
-const USE_MEMORY_STORE = process.env.APPRAISAL_STORE !== "file";
+const USE_MEMORY_STORE =
+  process.env.APPRAISAL_STORE === "memory" ||
+  (process.env.APPRAISAL_STORE !== "file" &&
+    process.env.NODE_ENV !== "development");
 
 export type ManagerReviewNotification = {
   id: string;

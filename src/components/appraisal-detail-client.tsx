@@ -680,6 +680,10 @@ function AppraisalDetailInner({
           role="status"
         >
           Manager review saved. Status is now <strong>reviewed</strong>.
+          <p className="mt-2">
+            HR will not see this yet — click <strong>Complete Appraisal</strong>{" "}
+            above to send it to HR.
+          </p>
         </div>
       )}
       {managerBanner === "updated" && (
@@ -763,6 +767,16 @@ function AppraisalDetailInner({
           )}
           {managerCanReview && (
             <>
+              {appraisal.status === "reviewed" && (
+                <button
+                  type="button"
+                  disabled={busy}
+                  className="rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-violet-800 disabled:opacity-50"
+                  onClick={() => void completeAppraisalToHr()}
+                >
+                  Complete Appraisal
+                </button>
+              )}
               <button
                 type="button"
                 disabled={busy || !managerSubmitReady}
@@ -771,23 +785,17 @@ function AppraisalDetailInner({
                     ? "Select a manager rating for every KPI and capability"
                     : undefined
                 }
-                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50"
+                className={
+                  appraisal.status === "reviewed"
+                    ? "rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-black shadow-sm disabled:opacity-50"
+                    : "rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50"
+                }
                 onClick={() => submitManagerReview()}
               >
                 {appraisal.status === "reviewed"
                   ? "Update manager review"
                   : "Submit manager review"}
               </button>
-              {appraisal.status === "reviewed" && (
-                <button
-                  type="button"
-                  disabled={busy}
-                  className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-black shadow-sm disabled:opacity-50"
-                  onClick={() => void completeAppraisalToHr()}
-                >
-                  Complete Appraisal
-                </button>
-              )}
             </>
           )}
         </div>
