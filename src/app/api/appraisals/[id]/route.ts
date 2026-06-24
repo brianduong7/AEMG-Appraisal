@@ -208,6 +208,7 @@ export async function PATCH(
         employeeComments: data.employeeComments,
         managerComments: current.managerComments,
         reviewingManagerId,
+        managerOverallOverride: current.managerOverallOverride,
         status: action === "employee_submit" ? "submitted" : "draft",
       };
     });
@@ -240,6 +241,9 @@ export async function PATCH(
 
     const appraisalComments = String(
       (body as { managerComments?: unknown }).managerComments ?? ""
+    );
+    const managerOverallOverride = parseOptionalRating(
+      (body as { managerOverallOverride?: unknown }).managerOverallOverride
     );
 
     const kpiManagerRatings = kpisPayload.map((row) =>
@@ -295,6 +299,7 @@ export async function PATCH(
         kpis: mergedKpis,
         capabilities: mergedCaps,
         managerComments: appraisalComments,
+        managerOverallOverride,
         status: "reviewed" as const,
       };
     });

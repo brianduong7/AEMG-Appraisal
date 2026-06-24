@@ -179,5 +179,9 @@ export function migrateAppraisal(raw: unknown): Appraisal {
     capabilities: migrateCapabilities(a.capabilities),
     employeeComments,
     managerComments: String(a.managerComments ?? ""),
+    managerOverallOverride:
+      a.managerOverallOverride == null || a.managerOverallOverride === ""
+        ? null
+        : Math.min(5, Math.max(1, Math.round(Number(a.managerOverallOverride)))),
   };
 }

@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { DEMO_HR, DEMO_MANAGER, findMockUser } from "@/lib/mock-users";
+import { AppLogo } from "@/components/app-logo";
 import { useSession } from "@/contexts/session-context";
 
 const EMMA_ID = "emma" as const;
@@ -94,12 +95,7 @@ export function LoginContent() {
 
       <div className="flex flex-1 flex-col items-center justify-center px-4 py-10">
         <div className="mb-6 flex flex-col items-center">
-          <div
-            className="mb-4 flex h-10 w-10 items-center justify-center rounded bg-zinc-900 text-sm font-semibold text-white"
-            aria-hidden
-          >
-            A
-          </div>
+          <AppLogo variant="login" href="/" className="mb-4" />
           <h1 className="text-xl font-semibold tracking-tight text-zinc-900">
             Login to AEMG Appraisal
           </h1>

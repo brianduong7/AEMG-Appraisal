@@ -16,6 +16,7 @@ const geistMono = Geist_Mono({
 export const metadata: Metadata = {
   title: "AEMG Appraisal",
   description: "Employee appraisal demo — draft, submit, manager review",
+  icons: { icon: "/logos/aife.png" },
 };
 
 export default function RootLayout({

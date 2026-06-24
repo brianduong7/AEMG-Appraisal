@@ -9,6 +9,7 @@ import { MOCK_USERS } from "@/lib/mock-users";
 import { useRole } from "@/contexts/role-context";
 import { useSession } from "@/contexts/session-context";
 import { saveAppraisalBootstrap } from "@/lib/appraisal-bootstrap";
+import { AppLogo } from "@/components/app-logo";
 import { HeaderNotificationsButton } from "@/components/header-notifications-button";
 
 function statusBadge(status: Appraisal["status"]) {
@@ -67,6 +68,7 @@ export function HomeContent() {
   const [managerCreateOwnerId, setManagerCreateOwnerId] = useState(
     MOCK_USERS[0]?.id ?? "emma"
   );
+  const [filterSidebarOpen, setFilterSidebarOpen] = useState(true);
 
   const refreshList = useCallback(async () => {
     const res = await fetch("/api/appraisals");
@@ -185,24 +187,7 @@ export function HomeContent() {
       <header className="border-b border-zinc-200 bg-white">
         <div className="mx-auto flex max-w-[1600px] items-center gap-3 px-4 py-2.5 sm:px-6">
           <div className="flex min-w-0 shrink-0 items-center gap-2.5">
-            <div
-              className="flex h-8 w-8 shrink-0 items-center justify-center rounded border border-zinc-200 bg-white text-zinc-600"
-              aria-hidden
-            >
-              <svg
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.5"
-              >
-                <rect x="3" y="3" width="7" height="7" rx="1" />
-                <rect x="14" y="3" width="7" height="7" rx="1" />
-                <rect x="3" y="14" width="7" height="7" rx="1" />
-                <rect x="14" y="14" width="7" height="7" rx="1" />
-              </svg>
-            </div>
+            <AppLogo variant="header" />
             <nav className="text-xs text-zinc-500" aria-label="Breadcrumb">
               <span className="font-medium text-zinc-800">Performance</span>
               <span className="mx-1 text-zinc-300">&gt;</span>
@@ -276,8 +261,10 @@ export function HomeContent() {
 
       <div className="mx-auto flex w-full max-w-[1600px] flex-1 gap-0 bg-white px-4 py-4 sm:px-6 lg:gap-6">
         <aside
-          className="hidden w-[240px] shrink-0 flex-col border-r border-zinc-200 bg-white pr-4 lg:flex"
+          id="appraisal-filter-sidebar"
+          className={`${filterSidebarOpen ? "hidden lg:flex" : "hidden"} w-[240px] shrink-0 flex-col border-r border-zinc-200 bg-white pr-4`}
           aria-label="Filters"
+          aria-hidden={!filterSidebarOpen}
         >
           <p className="text-[11px] font-semibold uppercase tracking-wide text-zinc-500">
             Filter by
@@ -371,9 +358,18 @@ export function HomeContent() {
               <div className="flex min-w-0 items-center gap-2">
                 <button
                   type="button"
-                  className="flex h-9 w-9 shrink-0 items-center justify-center rounded border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50"
-                  title="Menu"
-                  aria-label="Open sidebar menu"
+                  onClick={() => setFilterSidebarOpen((open) => !open)}
+                  className={`flex h-9 w-9 shrink-0 items-center justify-center rounded border border-zinc-200 bg-white text-zinc-600 hover:bg-zinc-50 ${
+                    filterSidebarOpen ? "bg-zinc-100" : ""
+                  }`}
+                  title={filterSidebarOpen ? "Hide filters" : "Show filters"}
+                  aria-label={
+                    filterSidebarOpen
+                      ? "Hide filter sidebar"
+                      : "Show filter sidebar"
+                  }
+                  aria-expanded={filterSidebarOpen}
+                  aria-controls="appraisal-filter-sidebar"
                 >
                   <svg
                     className="h-5 w-5"

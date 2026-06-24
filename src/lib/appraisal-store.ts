@@ -181,6 +181,7 @@ export async function createAppraisal(ownerUserId: string): Promise<Appraisal> {
     capabilities: defaultCapabilities(),
     employeeComments: "",
     managerComments: "",
+    managerOverallOverride: null,
   };
   const appraisal = migrateAppraisal(raw);
   const withNew = [...list, appraisal];

@@ -28,7 +28,7 @@ import {
   weightedKpiScoreFromManagerDraft,
 } from "@/lib/kpi-utils";
 import { RatingGuideModalTrigger } from "@/components/rating-guide-modal";
-import { ratingLabel } from "@/lib/ratings";
+import { ratingLabel, RATING_OPTIONS } from "@/lib/ratings";
 import { useRole } from "@/contexts/role-context";
 import { RatingReadOnly, RatingSelect } from "@/components/rating-select";
 import {
@@ -42,6 +42,7 @@ import {
   readAppraisalBootstrap,
   saveAppraisalBootstrap,
 } from "@/lib/appraisal-bootstrap";
+import { AppLogo } from "@/components/app-logo";
 import { HeaderNotificationsButton } from "@/components/header-notifications-button";
 
 function emptyKpi(): KpiRow {
@@ -54,6 +55,15 @@ function emptyKpi(): KpiRow {
     managerComments: "",
   };
 }
+
+const APPRAISAL_TABS = [
+  ["overview", "Overview"],
+  ["kpi", "KPI"],
+  ["capability", "Capability"],
+  ["overall", "Overall"],
+] as const;
+
+type AppraisalTabId = (typeof APPRAISAL_TABS)[number][0];
 
 function initialDraftForRole(
   appraisal: Appraisal,
@@ -231,9 +241,11 @@ function AppraisalDetailInner({
     ManagerCapLine[] | null
   >(null);
   const [managerReviewComments, setManagerReviewComments] = useState("");
-  const [activeTab, setActiveTab] = useState<
-    "overview" | "kpi" | "capability" | "overall"
-  >("overview");
+  const [managerOverallOverrideDraft, setManagerOverallOverrideDraft] =
+    useState<number | null>(null);
+  const [managerOverallModifyOpen, setManagerOverallModifyOpen] =
+    useState(false);
+  const [activeTab, setActiveTab] = useState<AppraisalTabId>("overview");
   const [ratingLegendOpen, setRatingLegendOpen] = useState(false);
   const [nineBoxModalOpen, setNineBoxModalOpen] = useState(false);
   const [capabilityAppendixOpen, setCapabilityAppendixOpen] = useState(false);
@@ -260,10 +272,14 @@ function AppraisalDetailInner({
         }))
       );
       setManagerReviewComments(appraisal.managerComments ?? "");
+      setManagerOverallOverrideDraft(appraisal.managerOverallOverride ?? null);
+      setManagerOverallModifyOpen(false);
     } else {
       setManagerKpiDraft(null);
       setManagerCapDraft(null);
       setManagerReviewComments("");
+      setManagerOverallOverrideDraft(null);
+      setManagerOverallModifyOpen(false);
     }
   }, [appraisal, role]);
 
@@ -388,6 +404,7 @@ function AppraisalDetailInner({
           kpis: managerKpiDraft,
           capabilities: managerCapDraft,
           managerComments: managerReviewComments,
+          managerOverallOverride: managerOverallOverrideDraft,
         }),
       });
       const body = await res.json().catch(() => ({}));
@@ -458,6 +475,20 @@ function AppraisalDetailInner({
 
   const overallSelf = overallPerformanceScore(kpiSelfScore, capSelfAvg);
   const overallMgr = overallPerformanceScore(kpiMgrScore, capMgrAvg);
+
+  const managerOverallOverrideActive = managerCanReview
+    ? managerOverallOverrideDraft
+    : appraisal.managerOverallOverride;
+
+  const computedManagerOverallLabel =
+    overallMgr != null
+      ? ratingLabel(Math.min(5, Math.max(1, Math.round(overallMgr))))
+      : null;
+
+  const finalManagerOverallLabel =
+    managerOverallOverrideActive != null
+      ? ratingLabel(managerOverallOverrideActive)
+      : computedManagerOverallLabel;
 
   const statusBadge =
     appraisal.status === "draft"
@@ -578,6 +609,7 @@ function AppraisalDetailInner({
     <div className="flex min-h-full flex-1 flex-col bg-zinc-50 text-black">
       <header className="border-b border-zinc-200/80 bg-white">
         <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-6 py-3">
+          <AppLogo variant="header" />
           <nav
             className="text-xs text-zinc-500"
             aria-label="Breadcrumb"
@@ -761,28 +793,24 @@ function AppraisalDetailInner({
         </div>
       </div>
 
-      <div className="mb-6 flex flex-wrap gap-1 border-b border-zinc-200">
-        {(
-          [
-            ["overview", "Overview"],
-            ["kpi", "KPI"],
-            ["capability", "Capability"],
-            ["overall", "Overall"],
-          ] as const
-        ).map(([id, label]) => (
-          <button
-            key={id}
-            type="button"
-            onClick={() => setActiveTab(id)}
-            className={`border-b-2 px-4 py-2.5 text-sm font-medium transition ${
-              activeTab === id
-                ? "border-zinc-900 text-black"
-                : "border-transparent text-zinc-500 hover:text-black"
-            }`}
-          >
-            {label}
-          </button>
-        ))}
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3 border-b border-zinc-200">
+        <div className="flex flex-wrap gap-1">
+          {APPRAISAL_TABS.map(([id, label]) => (
+            <button
+              key={id}
+              type="button"
+              onClick={() => setActiveTab(id)}
+              className={`border-b-2 px-4 py-2.5 text-sm font-medium transition ${
+                activeTab === id
+                  ? "border-zinc-900 text-black"
+                  : "border-transparent text-zinc-500 hover:text-black"
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <TabStepNav activeTab={activeTab} onTabChange={setActiveTab} />
       </div>
 
       {formError && (
@@ -1358,10 +1386,80 @@ function AppraisalDetailInner({
                     </p>
                     <p className="mt-3 text-base font-semibold text-black">
                       Manager overall:{" "}
-                      {overallMgr != null
-                        ? ratingLabel(Math.min(5, Math.max(1, Math.round(overallMgr))))
-                        : "—"}
+                      {computedManagerOverallLabel ?? "—"}
                     </p>
+                    {managerOverallOverrideActive != null && (
+                      <p className="mt-1 text-base font-semibold text-violet-900">
+                        Adjusted overall: {finalManagerOverallLabel}
+                      </p>
+                    )}
+                    {managerCanReview && (
+                      <div className="mt-3">
+                        <button
+                          type="button"
+                          onClick={() =>
+                            setManagerOverallModifyOpen((open) => !open)
+                          }
+                          aria-expanded={managerOverallModifyOpen}
+                          className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50"
+                        >
+                          <svg
+                            className="h-4 w-4 shrink-0"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                            stroke="currentColor"
+                            strokeWidth={2}
+                            aria-hidden
+                          >
+                            <path
+                              strokeLinecap="round"
+                              strokeLinejoin="round"
+                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
+                            />
+                          </svg>
+                          Adjust
+                        </button>
+                        {managerOverallModifyOpen && (
+                          <div className="mt-3 rounded-lg border border-zinc-200 bg-white p-4">
+                            <p className="text-sm font-medium text-black">
+                              Adjust overall rating
+                            </p>
+                            <p className="mt-1 text-xs text-zinc-600">
+                              Override the calculated score if you believe the
+                              employee deserves a different overall rating.
+                            </p>
+                            <label
+                              htmlFor="manager-overall-override"
+                              className="mt-3 mb-1.5 block text-xs font-medium text-zinc-600"
+                            >
+                              Final overall rating
+                            </label>
+                            <select
+                              id="manager-overall-override"
+                              className="w-full max-w-md rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-black"
+                              value={
+                                managerOverallOverrideDraft == null
+                                  ? ""
+                                  : String(managerOverallOverrideDraft)
+                              }
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                setManagerOverallOverrideDraft(
+                                  v === "" ? null : Number(v)
+                                );
+                              }}
+                            >
+                              <option value="">Use calculated score</option>
+                              {RATING_OPTIONS.map((n) => (
+                                <option key={n} value={n}>
+                                  {n} — {ratingLabel(n)}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -1376,8 +1474,8 @@ function AppraisalDetailInner({
                     >
                       {(appraisal.status === "reviewed" ||
                         appraisal.status === "completed") &&
-                      overallMgr != null
-                        ? ratingLabel(Math.min(5, Math.max(1, Math.round(overallMgr))))
+                      finalManagerOverallLabel
+                        ? finalManagerOverallLabel
                         : "Not yet available — your manager records this after you submit your appraisal."}
                     </div>
                   </div>
@@ -1485,6 +1583,51 @@ function AppraisalDetailInner({
         onClose={() => setCapabilityAppendixOpen(false)}
       />
     </div>
+  );
+}
+
+function TabStepNav({
+  activeTab,
+  onTabChange,
+}: {
+  activeTab: AppraisalTabId;
+  onTabChange: (tab: AppraisalTabId) => void;
+}) {
+  const index = APPRAISAL_TABS.findIndex(([id]) => id === activeTab);
+  const prev = index > 0 ? APPRAISAL_TABS[index - 1] : null;
+  const next =
+    index >= 0 && index < APPRAISAL_TABS.length - 1
+      ? APPRAISAL_TABS[index + 1]
+      : null;
+
+  if (!prev && !next) return null;
+
+  return (
+    <nav
+      className="mb-0.5 flex shrink-0 items-center gap-2 pb-2"
+      aria-label="Tab navigation"
+    >
+      {prev ? (
+        <button
+          type="button"
+          onClick={() => onTabChange(prev[0])}
+          title={`Go to ${prev[1]}`}
+          className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-black shadow-sm hover:bg-zinc-50"
+        >
+          ← Back
+        </button>
+      ) : null}
+      {next ? (
+        <button
+          type="button"
+          onClick={() => onTabChange(next[0])}
+          title={`Go to ${next[1]}`}
+          className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-zinc-800"
+        >
+          Next →
+        </button>
+      ) : null}
+    </nav>
   );
 }
 

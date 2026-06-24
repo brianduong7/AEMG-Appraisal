@@ -62,5 +62,6 @@ export function buildDemoSubmittedEmmaForMark(): Appraisal {
     employeeComments:
       "Demo submission (pre-loaded): please add your manager ratings and comments below.",
     managerComments: "",
+    managerOverallOverride: null,
   });
 }

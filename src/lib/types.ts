@@ -55,6 +55,11 @@ export type Appraisal = {
   employeeComments: string;
   /** Populated at manager review. */
   managerComments: string;
+  /**
+   * Optional manager override of the calculated overall (1–5).
+   * When set, shown as the final manager overall rating to employee and HR.
+   */
+  managerOverallOverride: number | null;
 };
 
 export const MAX_KPIS = 5;
