@@ -10,6 +10,7 @@ import {
   reviewingManagerIdForOwner,
 } from "./mock-users";
 import { buildDemoSubmittedEmmaForMark } from "./demo-appraisal-seed";
+import { buildDemoHrCompletedAppraisals } from "./demo-hr-seed";
 import {
   addReviewPendingNotification,
   removeNotificationsForAppraisal,
@@ -129,9 +130,28 @@ async function ensureDemoSubmittedEmmaForMark(
   return list;
 }
 
+async function ensureDemoCompletedForHr(list: Appraisal[]): Promise<Appraisal[]> {
+  if (process.env.DISABLE_DEMO_APPRAISAL_SEED === "1") {
+    return list;
+  }
+  const seeds = buildDemoHrCompletedAppraisals();
+  let added = false;
+  for (const demo of seeds) {
+    if (list.some((a) => a.id === demo.id)) continue;
+    if (list.some((a) => a.ownerUserId === demo.ownerUserId)) continue;
+    list.push(demo);
+    added = true;
+  }
+  if (added) {
+    await writeAppraisals(list);
+  }
+  return list;
+}
+
 export async function readAppraisals(): Promise<Appraisal[]> {
   let list = await ensureFile();
   list = await ensureDemoSubmittedEmmaForMark(list);
+  list = await ensureDemoCompletedForHr(list);
   const { next, changed } = await applyAppraisalListPolicy(list);
   if (changed) {
     await writeAppraisals(next);

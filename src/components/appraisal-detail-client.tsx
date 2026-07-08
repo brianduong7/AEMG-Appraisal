@@ -43,6 +43,7 @@ import {
   saveAppraisalBootstrap,
 } from "@/lib/appraisal-bootstrap";
 import { AppLogo } from "@/components/app-logo";
+import { DEMO_BRANCH_MANAGER_COMMENTS } from "@/lib/branch-manager-comments-demo";
 import { HeaderNotificationsButton } from "@/components/header-notifications-button";
 
 function emptyKpi(): KpiRow {
@@ -1240,6 +1241,9 @@ function AppraisalDetailInner({
                   </p>
                 )}
               </div>
+              {appraisal.status !== "draft" && (
+                <BranchManagerCommentsSection />
+              )}
               </>
               )}
             </section>
@@ -1591,6 +1595,77 @@ function AppraisalDetailInner({
         onClose={() => setCapabilityAppendixOpen(false)}
       />
     </div>
+  );
+}
+
+function BranchManagerCommentsSection() {
+  const [open, setOpen] = useState(false);
+  const count = DEMO_BRANCH_MANAGER_COMMENTS.length;
+  const preview = DEMO_BRANCH_MANAGER_COMMENTS[0];
+
+  return (
+    <section className="mt-4 rounded-lg border border-zinc-200 bg-white">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-zinc-50"
+      >
+        <div className="min-w-0">
+          <p className="text-sm font-semibold text-black">
+            Branch manager comments
+          </p>
+          {!open && preview ? (
+            <p className="mt-0.5 truncate text-xs text-zinc-500">
+              {count} comment{count === 1 ? "" : "s"} —{" "}
+              {preview.branch}: {preview.comment}
+            </p>
+          ) : (
+            <p className="mt-0.5 text-xs text-zinc-500">
+              {count} comment{count === 1 ? "" : "s"} (demo data)
+            </p>
+          )}
+        </div>
+        <svg
+          className={`h-4 w-4 shrink-0 text-zinc-500 transition-transform ${open ? "rotate-180" : ""}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth={2}
+          aria-hidden
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+      {open && (
+        <ul className="space-y-3 border-t border-zinc-200 px-4 py-4">
+          {DEMO_BRANCH_MANAGER_COMMENTS.map((item) => (
+            <li
+              key={item.id}
+              className="rounded-md border border-zinc-100 bg-zinc-50/80 px-3 py-3"
+            >
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <p className="text-sm font-medium text-black">
+                  {item.branch}
+                </p>
+                <time
+                  className="text-xs text-zinc-500"
+                  dateTime={item.recordedAt}
+                >
+                  {item.recordedAt}
+                </time>
+              </div>
+              <p className="mt-0.5 text-xs text-zinc-600">
+                {item.managerName} · {item.role}
+              </p>
+              <p className="mt-2 text-sm leading-relaxed text-zinc-800">
+                {item.comment}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
   );
 }
 
