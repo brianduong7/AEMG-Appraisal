@@ -10,6 +10,10 @@ type Props = {
   className?: string;
 };
 
+/**
+ * Ratings are stored 1–5 but displayed as words only
+ * (per review-process update: "remove numbers — to words").
+ */
 export function RatingSelect({
   id,
   value,
@@ -22,7 +26,7 @@ export function RatingSelect({
     <div className={`flex flex-wrap items-center gap-2 ${className ?? ""}`}>
       <select
         id={id}
-        className="rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm text-black"
+        className="w-full min-w-40 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-navy-950 shadow-sm outline-none transition focus:border-navy-500 focus:ring-2 focus:ring-navy-500/15"
         value={selectValue}
         disabled={disabled}
         onChange={(e) => {
@@ -30,31 +34,24 @@ export function RatingSelect({
           onChange(v === "" ? null : Number(v));
         }}
       >
-        <option value="">Select</option>
+        <option value="">Select rating</option>
         {RATING_OPTIONS.map((n) => (
           <option key={n} value={n}>
-            {n}
+            {ratingLabel(n)}
           </option>
         ))}
       </select>
-      {value != null && (
-        <span className="text-sm text-zinc-600">{ratingLabel(value)}</span>
-      )}
     </div>
   );
 }
 
 export function RatingReadOnly({ value }: { value: number | null }) {
   if (value == null) {
-    return <span className="text-sm text-zinc-400">—</span>;
+    return <span className="text-sm text-slate-400">—</span>;
   }
   return (
-    <span className="text-sm">
-      <span className="font-medium tabular-nums">{value}</span>
-      <span className="text-zinc-600">
-        {" "}
-        — {ratingLabel(value)}
-      </span>
+    <span className="text-sm font-medium text-navy-950">
+      {ratingLabel(value)}
     </span>
   );
 }

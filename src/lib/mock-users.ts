@@ -2,11 +2,13 @@ import type { Appraisal } from "./types";
 
 export type MockUser = {
   id: string;
+  /** Preferred display / short name — prefer englishName for formal fields. */
   employeeName: string;
   englishName: string;
   position: string;
   department: string;
   mLevel: number;
+  /** Full name of the line manager. */
   managerName: string;
   entity: string;
 };
@@ -15,17 +17,17 @@ export type MockUser = {
 export const MOCK_USERS: MockUser[] = [
   {
     id: "emma",
-    employeeName: "Emma",
+    employeeName: "Emma Thompson",
     englishName: "Emma Thompson",
     position: "Senior Analyst",
     department: "Corporate Finance",
     mLevel: 4,
-    managerName: "Mark",
+    managerName: "Mark Stevenson",
     entity: "HQ Corporate Services",
   },
   {
     id: "mark",
-    employeeName: "Mark",
+    employeeName: "Mark Stevenson",
     englishName: "Mark Stevenson",
     position: "Department Manager",
     department: "Operations",
@@ -35,13 +37,23 @@ export const MOCK_USERS: MockUser[] = [
   },
   {
     id: "john",
-    employeeName: "John",
+    employeeName: "John Lee",
     englishName: "John Lee",
     position: "Financial Analyst",
     department: "Corporate Finance",
     mLevel: 3,
-    managerName: "Mark",
+    managerName: "Mark Stevenson",
     entity: "AFE",
+  },
+  {
+    id: "hr",
+    employeeName: "HR Manager",
+    englishName: "HR Manager",
+    position: "HR Business Partner",
+    department: "People & Culture",
+    mLevel: 5,
+    managerName: "David Park",
+    entity: "HQ Corporate Services",
   },
 ];
 
@@ -51,13 +63,23 @@ export const DEMO_COMPANY_NAME = "AEMG EDUCATION";
 /** Single demo manager login — reviews reports whose appraisals name them as reviewer. */
 export const DEMO_MANAGER = {
   id: "mark",
-  displayName: "Mark",
+  displayName: "Mark Stevenson",
 } as const;
 
 /** Demo HR login — sees appraisals after the manager completes and sends to HR. */
 export const DEMO_HR = {
   id: "hr",
-  displayName: "HR",
+  displayName: "HR Manager",
+} as const;
+
+/**
+ * Demo skip-level (one above direct manager). Used for completion notifications.
+ * Sam to confirm production hierarchy.
+ */
+export const DEMO_SKIP_LEVEL_MANAGER = {
+  id: "david",
+  displayName: "David Park",
+  role: "Department Director",
 } as const;
 
 export type EmploymentProfile = Pick<
@@ -73,7 +95,7 @@ export type EmploymentProfile = Pick<
 
 export function employmentProfileFromUser(u: MockUser): EmploymentProfile {
   return {
-    employeeName: u.employeeName,
+    employeeName: u.englishName || u.employeeName,
     englishName: u.englishName,
     position: u.position,
     department: u.department,
@@ -94,6 +116,7 @@ export function findMockUser(id: string): MockUser | undefined {
 export function reviewingManagerIdForOwner(ownerUserId: string): string | null {
   if (ownerUserId === "emma" || ownerUserId === "john") return DEMO_MANAGER.id;
   if (ownerUserId === "mark") return null;
+  if (ownerUserId === "hr") return null;
   const u = findMockUser(ownerUserId);
   if (!u) return null;
   if (u.managerName.toLowerCase().includes("mark")) return DEMO_MANAGER.id;
@@ -110,5 +133,18 @@ export function overviewProfileForAppraisal(
 ): EmploymentProfile {
   const dir = findMockUser(ownerUserId);
   if (dir) return employmentProfileFromUser(dir);
-  return fallback;
+  return {
+    ...fallback,
+    employeeName: fallback.englishName || fallback.employeeName,
+    managerName: fallback.managerName,
+  };
+}
+
+/** Formal full name for list / overview Employee field. */
+export function displayEmployeeFullName(
+  a: Pick<Appraisal, "englishName" | "employeeName" | "ownerUserId">
+): string {
+  const dir = findMockUser(a.ownerUserId);
+  if (dir) return dir.englishName || dir.employeeName;
+  return a.englishName?.trim() || a.employeeName?.trim() || "—";
 }

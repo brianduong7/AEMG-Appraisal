@@ -3,12 +3,25 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import type { Appraisal, KpiRow } from "@/lib/types";
-import { MAX_KPIS } from "@/lib/types";
+import type {
+  Appraisal,
+  KpiRow,
+  MidYearRating,
+} from "@/lib/types";
+import {
+  MAX_KPIS,
+  MIN_KPIS,
+  MID_YEAR_RATING_LABELS,
+  MID_YEAR_RATING_OPTIONS,
+} from "@/lib/types";
+import { AppShell } from "@/components/app-shell";
 import { cloneAppraisal } from "@/lib/clone-appraisal";
 import {
   DEMO_COMPANY_NAME,
+  DEMO_HR,
+  DEMO_SKIP_LEVEL_MANAGER,
   employmentProfileFromUser,
+  findMockUser,
   overviewProfileForAppraisal,
 } from "@/lib/mock-users";
 import { HrReadonlyField } from "@/components/hr-readonly-field";
@@ -27,14 +40,12 @@ import {
   weightedKpiScore,
   weightedKpiScoreFromManagerDraft,
 } from "@/lib/kpi-utils";
-import { RatingGuideModalTrigger } from "@/components/rating-guide-modal";
 import { ratingLabel, RATING_OPTIONS } from "@/lib/ratings";
 import { useRole } from "@/contexts/role-context";
 import { RatingReadOnly, RatingSelect } from "@/components/rating-select";
 import {
   RatingLegendModal,
 } from "@/components/rating-legend";
-import { CapabilityAppendixModal } from "@/components/capability-appendix-reference";
 import {
   PerformanceNineBoxModal,
 } from "@/components/performance-nine-box-reference";
@@ -42,9 +53,8 @@ import {
   readAppraisalBootstrap,
   saveAppraisalBootstrap,
 } from "@/lib/appraisal-bootstrap";
-import { AppLogo } from "@/components/app-logo";
 import { DEMO_BRANCH_MANAGER_COMMENTS } from "@/lib/branch-manager-comments-demo";
-import { HeaderNotificationsButton } from "@/components/header-notifications-button";
+import { formatDueDateDisplay } from "@/lib/format-date";
 
 function emptyKpi(): KpiRow {
   return {
@@ -54,15 +64,27 @@ function emptyKpi(): KpiRow {
     selfRating: null,
     managerRating: null,
     managerComments: "",
+    midYearRating: null,
+    midYearComment: "",
   };
 }
 
 const APPRAISAL_TABS = [
   ["overview", "Overview"],
-  ["kpi", "KPI"],
   ["capability", "Capability"],
+  ["kpi", "KPI"],
   ["overall", "Overall"],
 ] as const;
+
+/** Shared Review-cycles layout — Mid-Year and Annual use the same 2-col grid. */
+const REVIEW_CYCLE_GRID =
+  "grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start sm:gap-x-4";
+const REVIEW_CYCLE_SUBLABEL =
+  "mb-1 text-[10px] font-medium uppercase tracking-wide text-zinc-500";
+const REVIEW_CYCLE_SECTION_TITLE =
+  "mb-2 text-[10px] font-semibold uppercase tracking-wide";
+const REVIEW_CYCLE_VALUE =
+  "min-h-7 text-sm leading-snug text-navy-950";
 
 type AppraisalTabId = (typeof APPRAISAL_TABS)[number][0];
 
@@ -71,13 +93,25 @@ function initialDraftForRole(
   role: "employee" | "manager" | "hr"
 ): Appraisal | null {
   if (appraisal.status === "draft" && role === "employee") {
-    return cloneAppraisal(appraisal);
+    const next = cloneAppraisal(appraisal);
+    while (next.kpis.length < MIN_KPIS) {
+      next.kpis.push(emptyKpi());
+    }
+    return next;
   }
   return null;
 }
 
 type ManagerKpiLine = { managerRating: number | null };
 type ManagerCapLine = { managerRating: number | null };
+type MidYearKpiLine = {
+  midYearRating: MidYearRating | null;
+  midYearComment: string;
+};
+type MidYearCapLine = {
+  midYearRating: number | null;
+  midYearComment: string;
+};
 
 export function AppraisalDetailClient({
   id,
@@ -202,14 +236,23 @@ function AppraisalDetailInner({
   appraisal: Appraisal;
   setAppraisal: (next: Appraisal) => void;
 }) {
-  const { user, mode, managerProfile, hrProfile } = useSession();
+  const { user: sessionUser, mode } = useSession();
   const { role, setRole } = useRole();
+
+  /** HR viewing their own record acts as the employee for that appraisal. */
+  const viewingOwnAsHr =
+    mode === "hr" && appraisal.ownerUserId === DEMO_HR.id;
+  const user = viewingOwnAsHr
+    ? (findMockUser(DEMO_HR.id) ?? sessionUser)
+    : sessionUser;
 
   useEffect(() => {
     if (mode === "employee") setRole("employee");
     if (mode === "manager") setRole("manager");
-    if (mode === "hr") setRole("hr");
-  }, [mode, setRole]);
+    if (mode === "hr") {
+      setRole(viewingOwnAsHr ? "employee" : "hr");
+    }
+  }, [mode, setRole, viewingOwnAsHr]);
 
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -228,11 +271,23 @@ function AppraisalDetailInner({
     initialDraftForRole(appraisal, role)
   );
   useEffect(() => {
-    if (appraisal.status === "draft" && role === "employee") {
-      setDraft(cloneAppraisal(appraisal));
-    } else {
+    if (role !== "employee") {
       setDraft(null);
+      return;
     }
+    if (appraisal.status === "draft") {
+      const next = cloneAppraisal(appraisal);
+      while (next.kpis.length < MIN_KPIS) {
+        next.kpis.push(emptyKpi());
+      }
+      setDraft(next);
+      return;
+    }
+    if (appraisal.status === "submitted") {
+      setDraft(cloneAppraisal(appraisal));
+      return;
+    }
+    setDraft(null);
   }, [appraisal, role]);
 
   const [managerKpiDraft, setManagerKpiDraft] = useState<
@@ -244,12 +299,20 @@ function AppraisalDetailInner({
   const [managerReviewComments, setManagerReviewComments] = useState("");
   const [managerOverallOverrideDraft, setManagerOverallOverrideDraft] =
     useState<number | null>(null);
-  const [managerOverallModifyOpen, setManagerOverallModifyOpen] =
-    useState(false);
+  const [midYearDraft, setMidYearDraft] = useState<MidYearKpiLine[] | null>(
+    null
+  );
+  const [midYearCapDraft, setMidYearCapDraft] = useState<
+    MidYearCapLine[] | null
+  >(null);
+  const [midYearOverallComment, setMidYearOverallComment] = useState("");
+  const [midYearBanner, setMidYearBanner] = useState<
+    null | "saved" | "submitted"
+  >(null);
+  const [skipLevelNotice, setSkipLevelNotice] = useState(false);
   const [activeTab, setActiveTab] = useState<AppraisalTabId>("overview");
   const [ratingLegendOpen, setRatingLegendOpen] = useState(false);
   const [nineBoxModalOpen, setNineBoxModalOpen] = useState(false);
-  const [capabilityAppendixOpen, setCapabilityAppendixOpen] = useState(false);
 
   const appraisalCycleYear = useMemo(() => new Date().getFullYear(), []);
   const appraisalSeries = useMemo(
@@ -274,19 +337,64 @@ function AppraisalDetailInner({
       );
       setManagerReviewComments(appraisal.managerComments ?? "");
       setManagerOverallOverrideDraft(appraisal.managerOverallOverride ?? null);
-      setManagerOverallModifyOpen(false);
+      setMidYearDraft(
+        appraisal.kpis.map((k) => ({
+          midYearRating: k.midYearRating ?? null,
+          midYearComment: k.midYearComment ?? "",
+        }))
+      );
+      setMidYearCapDraft(
+        appraisal.capabilities.map((c) => ({
+          midYearRating: c.midYearRating ?? null,
+          midYearComment: c.midYearComment ?? "",
+        }))
+      );
+      setMidYearOverallComment(appraisal.midYearManagerComments ?? "");
+    } else if (
+      role === "employee" &&
+      appraisal.status === "submitted" &&
+      appraisal.midYearStatus !== "completed"
+    ) {
+      setMidYearDraft(
+        appraisal.kpis.map((k) => ({
+          midYearRating: k.midYearRating ?? null,
+          midYearComment: k.midYearComment ?? "",
+        }))
+      );
     } else {
       setManagerKpiDraft(null);
       setManagerCapDraft(null);
       setManagerReviewComments("");
       setManagerOverallOverrideDraft(null);
-      setManagerOverallModifyOpen(false);
+      setMidYearDraft(null);
+      setMidYearCapDraft(null);
+      setMidYearOverallComment("");
     }
   }, [appraisal, role]);
 
-  const employeeEditable =
+  const employeeKpiEditable =
     role === "employee" && appraisal.status === "draft" && draft != null;
-  const src = employeeEditable ? draft! : appraisal;
+  const employeeMidYearEditable =
+    role === "employee" &&
+    appraisal.status === "submitted" &&
+    appraisal.midYearStatus !== "completed" &&
+    draft != null;
+  const employeeAnnualEditable =
+    role === "employee" &&
+    appraisal.status === "submitted" &&
+    appraisal.midYearStatus === "completed" &&
+    draft != null;
+  const employeeCanEditComments =
+    employeeKpiEditable || employeeMidYearEditable || employeeAnnualEditable;
+  const src =
+    employeeKpiEditable || employeeMidYearEditable || employeeAnnualEditable
+      ? draft!
+      : appraisal;
+  const showEmployeeSelfRating =
+    appraisal.status !== "draft" && appraisal.midYearStatus === "completed";
+  const showReviewCycles = appraisal.status !== "draft";
+  const showAnnualReview = appraisal.midYearStatus === "completed";
+  const showKpiRatingsSummary = showEmployeeSelfRating;
   const weightTotal = useMemo(() => sumKpiWeights(src.kpis), [src.kpis]);
   const weightsOk = Math.abs(weightTotal - 100) < 0.01;
 
@@ -294,15 +402,28 @@ function AppraisalDetailInner({
   const capSelfAvg = capabilitySelfAverage(src.capabilities);
 
   const employeeSubmitReady = useMemo(() => {
-    if (!draft) return false;
+    if (!draft || !employeeKpiEditable) return false;
+    if (draft.kpis.length < MIN_KPIS || draft.kpis.length > MAX_KPIS) {
+      return false;
+    }
     if (!weightsOk) return false;
     if (!draft.kpis.every((k) => (Number(k.weightPercent) || 0) > 0)) {
       return false;
     }
+    return true;
+  }, [draft, weightsOk, employeeKpiEditable]);
+
+  const employeeMidYearSubmitReady = useMemo(() => {
+    if (!draft || !employeeMidYearEditable) return false;
+    return draft.kpis.every((k) => k.midYearRating != null);
+  }, [draft, employeeMidYearEditable]);
+
+  const employeeAnnualSubmitReady = useMemo(() => {
+    if (!draft || !employeeAnnualEditable) return false;
     if (!draft.kpis.every((k) => k.selfRating != null)) return false;
     if (!draft.capabilities.every((c) => c.selfRating != null)) return false;
     return true;
-  }, [draft, weightsOk]);
+  }, [draft, employeeAnnualEditable]);
 
   const managerSubmitReady = useMemo(() => {
     if (!managerKpiDraft || !managerCapDraft) return false;
@@ -317,7 +438,7 @@ function AppraisalDetailInner({
     if (user.id !== appraisal.ownerUserId) return;
     if (action === "employee_submit" && !employeeSubmitReady) {
       setFormError(
-        "Select a self rating for every KPI and capability, and set each KPI weight above 0% so the total is 100%."
+        `Add ${MIN_KPIS}–${MAX_KPIS} KPIs, set each weight above 0%, and total exactly 100% before submitting.`
       );
       return;
     }
@@ -378,6 +499,7 @@ function AppraisalDetailInner({
       setAppraisal(next);
       saveAppraisalBootstrap(next);
       setCompleteAppraisalDemoBanner(true);
+      setSkipLevelNotice(true);
     } catch {
       setFormError("Network error.");
     } finally {
@@ -426,24 +548,180 @@ function AppraisalDetailInner({
     }
   }
 
+  async function saveEmployeeMidYear(
+    action: "employee_midyear_save" | "employee_midyear_submit"
+  ) {
+    if (!draft) return;
+    if (action === "employee_midyear_submit" && !employeeMidYearSubmitReady) {
+      setFormError(
+        "Select On Track / Not on Track for every KPI before submitting your mid-year review."
+      );
+      return;
+    }
+    setBusy(true);
+    setFormError(null);
+    try {
+      const res = await fetch(`/api/appraisals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          kpis: draft.kpis.map((k) => ({ midYearRating: k.midYearRating })),
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setFormError(
+          typeof body?.error === "string" ? body.error : "Request failed."
+        );
+        return;
+      }
+      const next = body as Appraisal;
+      setAppraisal(next);
+      saveAppraisalBootstrap(next);
+      if (action === "employee_midyear_submit") {
+        setEmployeeBanner(true);
+      }
+    } catch {
+      setFormError("Network error.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveEmployeeAnnual(
+    action: "employee_annual_save" | "employee_annual_submit"
+  ) {
+    if (!draft || !user) return;
+    if (user.id !== appraisal.ownerUserId) return;
+    if (action === "employee_annual_submit" && !employeeAnnualSubmitReady) {
+      setFormError(
+        "Select a self rating for every KPI and capability before submitting."
+      );
+      return;
+    }
+    setBusy(true);
+    setFormError(null);
+    const header = employmentProfileFromUser(user);
+    try {
+      const res = await fetch(`/api/appraisals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          data: {
+            ...header,
+            kpis: draft.kpis,
+            capabilities: draft.capabilities,
+            employeeComments: draft.employeeComments,
+          },
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setFormError(
+          typeof body?.error === "string" ? body.error : "Request failed."
+        );
+        return;
+      }
+      const next = body as Appraisal;
+      setAppraisal(next);
+      saveAppraisalBootstrap(next);
+      if (action === "employee_annual_submit") {
+        setEmployeeBanner(true);
+      }
+    } catch {
+      setFormError("Network error.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveMidYear(
+    action: "manager_midyear_save" | "manager_midyear_submit"
+  ) {
+    if (!midYearDraft) return;
+    if (
+      action === "manager_midyear_submit" &&
+      midYearDraft.some((l) => !l.midYearComment.trim())
+    ) {
+      setFormError(
+        "Add a mid-year comment for every KPI before submitting the mid-year review."
+      );
+      return;
+    }
+    if (
+      action === "manager_midyear_submit" &&
+      appraisal.kpis.some((k) => k.midYearRating == null)
+    ) {
+      setFormError(
+        "The employee must submit their mid-year ratings before you can complete the mid-year review."
+      );
+      return;
+    }
+    setBusy(true);
+    setFormError(null);
+    try {
+      const res = await fetch(`/api/appraisals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action,
+          kpis: midYearDraft.map((l) => ({ midYearComment: l.midYearComment })),
+          capabilities: midYearCapDraft?.map((l) => ({
+            midYearComment: l.midYearComment,
+          })),
+          midYearManagerComments: midYearOverallComment,
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setFormError(
+          typeof body?.error === "string" ? body.error : "Request failed."
+        );
+        return;
+      }
+      const next = body as Appraisal;
+      setAppraisal(next);
+      saveAppraisalBootstrap(next);
+      setMidYearBanner(
+        action === "manager_midyear_submit" ? "submitted" : "saved"
+      );
+    } catch {
+      setFormError("Network error.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const isEmployee = role === "employee";
   const isManager = role === "manager";
   const isHr = role === "hr";
-  const employeeReadOnlyEmployee =
-    isEmployee &&
-    (appraisal.status === "submitted" ||
-      appraisal.status === "reviewed" ||
-      appraisal.status === "completed");
-  const managerWaiting = isManager && appraisal.status === "draft";
-  const managerCanReview =
+  /** Mid-year: manager comments per KPI after employee mid-year ratings. */
+  const managerCanMidYear =
     isManager &&
     (appraisal.status === "submitted" || appraisal.status === "reviewed") &&
+    appraisal.midYearStatus !== "completed" &&
+    midYearDraft != null;
+  const employeeReadOnlyEmployee =
+    isEmployee &&
+    (appraisal.status === "reviewed" || appraisal.status === "completed");
+  const managerWaiting = isManager && appraisal.status === "draft";
+  const employeeAnnualRatingsComplete =
+    appraisal.kpis.every((k) => k.selfRating != null) &&
+    appraisal.capabilities.every((c) => c.selfRating != null);
+  const managerCanAnnualReview =
+    isManager &&
+    (appraisal.status === "submitted" || appraisal.status === "reviewed") &&
+    appraisal.midYearStatus === "completed" &&
+    employeeAnnualRatingsComplete &&
     managerKpiDraft != null &&
     managerCapDraft != null;
+  const managerCanReview = managerCanAnnualReview;
 
-  /** Reference guides: hidden for employee/manager; shown only to HR after send-to-HR (completed). */
+  /** Reference guides: HR / Super Admin always; others when completed. */
   const showAppraisalReferenceTools =
-    isHr && appraisal.status === "completed";
+    isHr || appraisal.status === "completed";
 
   const kpiMgrScore = useMemo(() => {
     if (
@@ -490,37 +768,6 @@ function AppraisalDetailInner({
     managerOverallOverrideActive != null
       ? ratingLabel(managerOverallOverrideActive)
       : computedManagerOverallLabel;
-
-  const statusBadge =
-    appraisal.status === "draft"
-      ? {
-          label: "Draft",
-          className:
-            "rounded-md bg-amber-100 px-2.5 py-0.5 text-xs font-semibold text-amber-900",
-        }
-      : appraisal.status === "submitted"
-        ? {
-            label: "Submitted",
-            className:
-              "rounded-md bg-sky-100 px-2.5 py-0.5 text-xs font-semibold text-sky-900",
-          }
-        : appraisal.status === "reviewed"
-          ? {
-              label: "Reviewed",
-              className:
-                "rounded-md bg-emerald-100 px-2.5 py-0.5 text-xs font-semibold text-emerald-900",
-            }
-          : {
-              label: "Completed",
-              className:
-                "rounded-md bg-violet-100 px-2.5 py-0.5 text-xs font-semibold text-violet-900",
-            };
-
-  const chromeInitial =
-    (mode === "employee" && user?.employeeName?.[0]?.toUpperCase()) ||
-    (mode === "manager" && managerProfile?.displayName?.[0]?.toUpperCase()) ||
-    (mode === "hr" && hrProfile?.displayName?.[0]?.toUpperCase()) ||
-    "A";
 
   const inputEnterprise =
     "w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-black shadow-sm outline-none transition focus:border-zinc-400 focus:ring-2 focus:ring-zinc-200";
@@ -589,68 +836,22 @@ function AppraisalDetailInner({
     );
   }
 
-  if (mode === "hr" && appraisal.status !== "completed") {
-    return (
-      <div className="mx-auto max-w-lg flex-1 px-4 py-16">
-        <p className="text-sm text-black">
-          HR can only open appraisals that the manager has completed and sent to
-          HR. This appraisal is not in that state yet.
-        </p>
-        <Link
-          href="/"
-          className="mt-4 inline-block text-sm font-medium text-black underline"
-        >
-          ← Home
-        </Link>
-      </div>
-    );
-  }
+  /* HR / Super Admin: free open access in demo (cycle lock windows deferred). */
 
   return (
-    <div className="flex min-h-full flex-1 flex-col bg-zinc-50 text-black">
-      <header className="border-b border-zinc-200/80 bg-white">
-        <div className="mx-auto flex max-w-6xl flex-wrap items-center gap-4 px-6 py-3">
-          <AppLogo variant="header" />
-          <nav
-            className="text-xs text-zinc-500"
-            aria-label="Breadcrumb"
-          >
-            <Link
-              href="/"
-              className="hover:text-black"
-            >
-              Performance
-            </Link>
-            <span className="mx-1.5 text-zinc-300">/</span>
-            <span className="font-medium text-black">
-              Appraisal
-            </span>
-          </nav>
-          <div className="ml-auto flex min-w-48 max-w-xl flex-1 items-center justify-end gap-3">
-            <input
-              type="search"
-              readOnly
-              placeholder="Search or type a command (⌘ + G)"
-              className="hidden w-full max-w-md rounded-full border border-zinc-200 bg-zinc-50 px-4 py-2 text-xs text-zinc-500 md:block"
-              aria-hidden
-            />
-            <HeaderNotificationsButton />
-            <div
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-zinc-900 text-sm font-semibold text-white"
-              aria-hidden
-            >
-              {chromeInitial}
-            </div>
-          </div>
-        </div>
-      </header>
-
+    <AppShell active="detail">
       <div className="mx-auto w-full max-w-[min(100%,96rem)] flex-1 px-6 py-8">
       <Link
-        href="/"
-        className="mb-6 inline-block text-sm font-medium text-zinc-600 hover:text-black"
+        href={
+          mode === "hr"
+            ? "/?view=admin"
+            : mode === "manager"
+              ? "/?view=team"
+              : "/?view=my"
+        }
+        className="mb-6 inline-block text-sm font-medium text-navy-600 hover:text-navy-800"
       >
-        ← All appraisals
+        ← Back to appraisals
       </Link>
 
       {employeeBanner && (
@@ -658,20 +859,20 @@ function AppraisalDetailInner({
           className="mb-6 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900"
           role="status"
         >
+          KPIs submitted. Your manager
           {appraisal.reviewingManagerId ? (
             <>
-              Appraisal submitted.{" "}
-              <strong>Mark</strong> has an in-app notification — sign in as{" "}
-              <strong>Mark (manager)</strong> on the home page to review.
+              {" "}
+              (<strong>Mark Stevenson</strong>)
             </>
           ) : (
             <>
-              Appraisal submitted. Your manager{" "}
-              <strong>{appraisal.managerName}</strong> is not set up as a demo
-              user; in production they would be notified by email or your HR
-              system.
+              {" "}
+              (<strong>{appraisal.managerName}</strong>)
             </>
-          )}
+          )}{" "}
+          and <strong>HR</strong> have been notified. Mid-year and annual
+          ratings unlock next.
         </div>
       )}
 
@@ -704,17 +905,46 @@ function AppraisalDetailInner({
           edited by the employee or manager anymore.
         </div>
       )}
+      {skipLevelNotice && (
+        <div
+          className="mb-6 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950"
+          role="status"
+        >
+          <strong>Demo notifications sent</strong> to the direct manager and one
+          level above: <strong>{DEMO_SKIP_LEVEL_MANAGER.displayName}</strong> (
+          {DEMO_SKIP_LEVEL_MANAGER.role}). Hierarchy pending Sam&apos;s
+          confirmation.
+        </div>
+      )}
+
+      {midYearBanner === "saved" && (
+        <div
+          className="mb-6 rounded-lg border border-gold-300 bg-gold-50 px-4 py-3 text-sm text-navy-900"
+          role="status"
+        >
+          Mid-year checkpoint saved as <strong>draft</strong>. Submit it when
+          your one-on-one is done.
+        </div>
+      )}
+      {midYearBanner === "submitted" && (
+        <div
+          className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+          role="status"
+        >
+          Mid-year review <strong>completed</strong>. Ratings and comments are
+          visible on the Annual review.
+        </div>
+      )}
 
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <div className="flex flex-wrap items-center gap-2 gap-y-1">
-            <h1 className="text-xl font-semibold tracking-tight text-black sm:text-2xl">
+          <div className="flex flex-wrap items-center gap-2 gap-y-1.5">
+            <h1 className="text-xl font-semibold tracking-tight text-navy-950 sm:text-2xl">
               Appraisal
             </h1>
-            <span className={statusBadge.className}>{statusBadge.label}</span>
-            <span className="text-xs text-zinc-500">
+            <span className="text-xs text-slate-500">
               {isEmployee ? "Employee" : isHr ? "HR" : "Manager"} ·{" "}
-              {identity.employeeName}
+              {identity.englishName || identity.employeeName}
             </span>
           </div>
           <p className="mt-1 text-xs text-zinc-500">
@@ -723,8 +953,23 @@ function AppraisalDetailInner({
           </p>
           {mode === "employee" && employeeReadOnlyEmployee && (
             <p className="mt-2 text-sm text-zinc-600">
-              <strong>View only</strong> — submitted or finalized appraisals
-              cannot be changed.
+              <strong>View only</strong> — your manager has finalized this
+              appraisal.
+            </p>
+          )}
+          {mode === "employee" &&
+            appraisal.status === "submitted" &&
+            appraisal.midYearStatus !== "completed" && (
+              <p className="mt-2 text-sm text-zinc-600">
+                <strong>Mid-year review</strong> — record your On Track /
+                Not on Track rating for each KPI. Your manager will add
+                comments after your one-on-one.
+              </p>
+            )}
+          {mode === "employee" && employeeAnnualEditable && (
+            <p className="mt-2 text-sm text-zinc-600">
+              <strong>Annual self-rating</strong> — rate each KPI and
+              capability, then submit for your manager&apos;s review.
             </p>
           )}
           {mode === "manager" && appraisal.status === "completed" && (
@@ -735,18 +980,18 @@ function AppraisalDetailInner({
           )}
           {mode === "hr" && (
             <p className="mt-2 text-sm text-zinc-600">
-              <strong>HR view</strong> — read-only record as received from the
-              manager.
+              <strong>Super Admin / HR view</strong> — free open access in this
+              demo (cycle lock windows deferred).
             </p>
           )}
         </div>
         <div className="flex flex-wrap gap-2">
-          {employeeEditable && (
+          {employeeKpiEditable && (
             <>
               <button
                 type="button"
                 disabled={busy}
-                className="rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-black shadow-sm disabled:opacity-50"
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-navy-950 shadow-sm transition hover:border-navy-300 disabled:opacity-50"
                 onClick={() => saveEmployee("employee_save")}
               >
                 Save
@@ -756,13 +1001,83 @@ function AppraisalDetailInner({
                 disabled={busy || !employeeSubmitReady}
                 title={
                   !employeeSubmitReady
-                    ? "Complete all ratings and KPI weights (100% total) to submit"
+                    ? `Need ${MIN_KPIS}–${MAX_KPIS} KPIs with weights totalling 100%`
                     : undefined
                 }
-                className="rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50"
+                className="rounded-lg bg-gradient-to-r from-navy-900 to-navy-700 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:from-navy-800 hover:to-navy-600 disabled:opacity-50"
                 onClick={() => saveEmployee("employee_submit")}
               >
-                Submit appraisal
+                Submit KPIs
+              </button>
+            </>
+          )}
+          {employeeMidYearEditable && (
+            <>
+              <button
+                type="button"
+                disabled={busy}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-navy-950 shadow-sm transition hover:border-navy-300 disabled:opacity-50"
+                onClick={() => saveEmployeeMidYear("employee_midyear_save")}
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                disabled={busy || !employeeMidYearSubmitReady}
+                title={
+                  !employeeMidYearSubmitReady
+                    ? "Select a mid-year rating for every KPI"
+                    : undefined
+                }
+                className="rounded-lg bg-gradient-to-r from-navy-900 to-navy-700 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:from-navy-800 hover:to-navy-600 disabled:opacity-50"
+                onClick={() => saveEmployeeMidYear("employee_midyear_submit")}
+              >
+                Submit mid-year review
+              </button>
+            </>
+          )}
+          {employeeAnnualEditable && (
+            <>
+              <button
+                type="button"
+                disabled={busy}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-navy-950 shadow-sm transition hover:border-navy-300 disabled:opacity-50"
+                onClick={() => saveEmployeeAnnual("employee_annual_save")}
+              >
+                Save
+              </button>
+              <button
+                type="button"
+                disabled={busy || !employeeAnnualSubmitReady}
+                title={
+                  !employeeAnnualSubmitReady
+                    ? "Complete all KPI and capability self-ratings to submit"
+                    : undefined
+                }
+                className="rounded-lg bg-gradient-to-r from-navy-900 to-navy-700 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:from-navy-800 hover:to-navy-600 disabled:opacity-50"
+                onClick={() => saveEmployeeAnnual("employee_annual_submit")}
+              >
+                Submit for manager review
+              </button>
+            </>
+          )}
+          {managerCanMidYear && (
+            <>
+              <button
+                type="button"
+                disabled={busy}
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-navy-950 shadow-sm transition hover:border-navy-300 disabled:opacity-50"
+                onClick={() => void saveMidYear("manager_midyear_save")}
+              >
+                Save mid-year
+              </button>
+              <button
+                type="button"
+                disabled={busy}
+                className="rounded-lg bg-gradient-to-r from-navy-900 to-navy-700 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:from-navy-800 hover:to-navy-600 disabled:opacity-50"
+                onClick={() => void saveMidYear("manager_midyear_submit")}
+              >
+                Submit mid-year review
               </button>
             </>
           )}
@@ -772,7 +1087,7 @@ function AppraisalDetailInner({
                 <button
                   type="button"
                   disabled={busy}
-                  className="rounded-lg bg-violet-700 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-violet-800 disabled:opacity-50"
+                  className="rounded-lg bg-gradient-to-r from-gold-600 to-gold-500 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-gold-600/25 transition hover:from-gold-700 hover:to-gold-600 disabled:opacity-50"
                   onClick={() => void completeAppraisalToHr()}
                 >
                   Complete Appraisal
@@ -788,8 +1103,8 @@ function AppraisalDetailInner({
                 }
                 className={
                   appraisal.status === "reviewed"
-                    ? "rounded-lg border border-zinc-300 bg-white px-4 py-2 text-sm font-medium text-black shadow-sm disabled:opacity-50"
-                    : "rounded-lg bg-zinc-900 px-4 py-2 text-sm font-medium text-white shadow-sm disabled:opacity-50"
+                    ? "rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-navy-950 shadow-sm transition hover:border-navy-300 disabled:opacity-50"
+                    : "rounded-lg bg-gradient-to-r from-navy-900 to-navy-700 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:from-navy-800 hover:to-navy-600 disabled:opacity-50"
                 }
                 onClick={() => submitManagerReview()}
               >
@@ -802,17 +1117,17 @@ function AppraisalDetailInner({
         </div>
       </div>
 
-      <div className="mb-6 flex flex-wrap items-end justify-between gap-3 border-b border-zinc-200">
+      <div className="mb-6 flex flex-wrap items-end justify-between gap-3 border-b border-slate-200">
         <div className="flex flex-wrap gap-1">
           {APPRAISAL_TABS.map(([id, label]) => (
             <button
               key={id}
               type="button"
               onClick={() => setActiveTab(id)}
-              className={`border-b-2 px-4 py-2.5 text-sm font-medium transition ${
+              className={`relative border-b-2 px-4 py-2.5 text-sm font-medium transition ${
                 activeTab === id
-                  ? "border-zinc-900 text-black"
-                  : "border-transparent text-zinc-500 hover:text-black"
+                  ? "border-gold-500 text-navy-900"
+                  : "border-transparent text-slate-500 hover:text-navy-800"
               }`}
             >
               {label}
@@ -846,30 +1161,16 @@ function AppraisalDetailInner({
                 </p>
             ) : (
               <>
-              <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <div className="mb-2">
                 <h2 className="text-lg font-semibold text-black">
                   Capability and skill development
                 </h2>
-                <RatingGuideModalTrigger label="Performance ratings (1–5) definitions" />
               </div>
-              <div className="mb-4 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center sm:justify-between">
-                <p className="text-sm text-zinc-600">
-                  {showAppraisalReferenceTools
-                    ? "Descriptions are prefilled for your M level. Open the appendix for the full M1–M10 framework."
-                    : "Descriptions are prefilled for your M level."}
-                </p>
-                {showAppraisalReferenceTools && (
-                  <button
-                    type="button"
-                    onClick={() => setCapabilityAppendixOpen(true)}
-                    className="shrink-0 rounded border border-zinc-200 bg-white px-3 py-1.5 text-xs font-medium text-zinc-800 shadow-sm hover:bg-zinc-50"
-                  >
-                    Appendix 1 — AEMG Capability Framework
-                  </button>
-                )}
-              </div>
+              <p className="mb-4 text-sm text-zinc-600">
+                Descriptions are prefilled for your M level.
+              </p>
               <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
-                <table className="w-full min-w-4xl border-collapse text-left text-sm">
+                <table className="w-full min-w-[52rem] border-collapse text-left text-sm">
                   <thead>
                     <tr className="border-b border-zinc-200 bg-zinc-100 text-xs font-semibold uppercase tracking-wide text-zinc-700">
                       <th className="w-12 px-2 py-2.5" scope="col">
@@ -878,19 +1179,15 @@ function AppraisalDetailInner({
                       <th className="min-w-36 px-2 py-2.5" scope="col">
                         Capability
                       </th>
-                      <th className="min-w-[18rem] px-2 py-2.5" scope="col">
+                      <th className="min-w-[16rem] px-2 py-2.5" scope="col">
                         Description
                       </th>
-                      <th className="min-w-36 px-2 py-2.5" scope="col">
-                        Employee rating{" "}
-                        <span className="font-normal text-red-600">*</span>
-                      </th>
-                      {(isManager || appraisal.status !== "draft") && (
-                        <th className="min-w-36 px-2 py-2.5" scope="col">
-                          Manager rating
-                          {managerCanReview && (
-                            <span className="font-normal text-red-600"> *</span>
-                          )}
+                      {showReviewCycles && (
+                        <th className="min-w-[22rem] px-2 py-2.5" scope="col">
+                          Review cycles
+                          <span className="mt-0.5 block font-normal normal-case tracking-normal text-zinc-500">
+                            Mid-Year comments and Annual ratings stacked
+                          </span>
                         </th>
                       )}
                     </tr>
@@ -910,39 +1207,118 @@ function AppraisalDetailInner({
                         <td className="px-2 py-2 text-sm leading-relaxed text-black">
                           {capabilityDescription(levelForFramework, cap.id)}
                         </td>
-                        <td className="px-2 py-2">
-                          {employeeEditable ? (
-                            <RatingSelect
-                              className="[&_span]:hidden"
-                              value={cap.selfRating}
-                              onChange={(n) => {
-                                if (!draft) return;
-                                const caps = [...draft.capabilities];
-                                caps[i] = { ...caps[i], selfRating: n };
-                                setDraft({ ...draft, capabilities: caps });
-                              }}
-                            />
-                          ) : (
-                            <RatingReadOnly value={cap.selfRating} />
-                          )}
-                        </td>
-                        {(isManager || appraisal.status !== "draft") && (
+                        {showReviewCycles && (
                           <td className="px-2 py-2">
-                            {managerCanReview && managerCapDraft ? (
-                              <RatingSelect
-                                className="[&_span]:hidden"
-                                value={managerCapDraft[i].managerRating}
-                                onChange={(n) => {
-                                  const next = [...managerCapDraft];
-                                  next[i] = { ...next[i], managerRating: n };
-                                  setManagerCapDraft(next);
-                                }}
-                              />
-                            ) : cap.managerRating != null ? (
-                              <RatingReadOnly value={cap.managerRating} />
-                            ) : (
-                              <span className="text-sm text-zinc-400">—</span>
-                            )}
+                            <div className="divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200">
+                              <div className="bg-gold-50/50 px-2.5 py-2.5">
+                                <p
+                                  className={`${REVIEW_CYCLE_SECTION_TITLE} text-gold-700`}
+                                >
+                                  Mid-Year
+                                </p>
+                                <p className={REVIEW_CYCLE_SUBLABEL}>
+                                  Manager Comments
+                                </p>
+                                <div className={REVIEW_CYCLE_VALUE}>
+                                  {managerCanMidYear && midYearCapDraft ? (
+                                    <textarea
+                                      rows={2}
+                                      className={`${inputEnterprise} min-h-12 resize-y text-sm`}
+                                      placeholder="Mid-year comment…"
+                                      value={
+                                        midYearCapDraft[i]?.midYearComment ?? ""
+                                      }
+                                      onChange={(e) => {
+                                        const next = [...midYearCapDraft];
+                                        next[i] = {
+                                          ...next[i],
+                                          midYearComment: e.target.value,
+                                        };
+                                        setMidYearCapDraft(next);
+                                      }}
+                                    />
+                                  ) : (
+                                    <p className="whitespace-pre-wrap text-sm text-zinc-700">
+                                      {cap.midYearComment?.trim()
+                                        ? cap.midYearComment
+                                        : "—"}
+                                    </p>
+                                  )}
+                                </div>
+                              </div>
+                              {showAnnualReview && (
+                              <div className="bg-navy-50/40 px-2.5 py-2.5">
+                                <p
+                                  className={`${REVIEW_CYCLE_SECTION_TITLE} text-navy-800`}
+                                >
+                                  Annual
+                                  {(employeeAnnualEditable || managerCanReview) && (
+                                    <span className="text-red-600"> *</span>
+                                  )}
+                                </p>
+                                <div className={REVIEW_CYCLE_GRID}>
+                                  <div>
+                                    <p className={REVIEW_CYCLE_SUBLABEL}>
+                                      Employee
+                                    </p>
+                                    <div className={REVIEW_CYCLE_VALUE}>
+                                      {employeeAnnualEditable ? (
+                                        <RatingSelect
+                                          className="[&_span]:hidden"
+                                          value={cap.selfRating}
+                                          onChange={(n) => {
+                                            if (!draft) return;
+                                            const caps = [...draft.capabilities];
+                                            caps[i] = {
+                                              ...caps[i],
+                                              selfRating: n,
+                                            };
+                                            setDraft({
+                                              ...draft,
+                                              capabilities: caps,
+                                            });
+                                          }}
+                                        />
+                                      ) : cap.selfRating != null ? (
+                                        <RatingReadOnly value={cap.selfRating} />
+                                      ) : (
+                                        <span className="text-zinc-400">—</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <p className={REVIEW_CYCLE_SUBLABEL}>
+                                      Manager
+                                    </p>
+                                    <div className={REVIEW_CYCLE_VALUE}>
+                                      {managerCanReview && managerCapDraft ? (
+                                        <RatingSelect
+                                          className="[&_span]:hidden"
+                                          value={
+                                            managerCapDraft[i].managerRating
+                                          }
+                                          onChange={(n) => {
+                                            const next = [...managerCapDraft];
+                                            next[i] = {
+                                              ...next[i],
+                                              managerRating: n,
+                                            };
+                                            setManagerCapDraft(next);
+                                          }}
+                                        />
+                                      ) : cap.managerRating != null ? (
+                                        <RatingReadOnly
+                                          value={cap.managerRating}
+                                        />
+                                      ) : (
+                                        <span className="text-zinc-400">—</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                              )}
+                            </div>
                           </td>
                         )}
                       </tr>
@@ -950,6 +1326,7 @@ function AppraisalDetailInner({
                   </tbody>
                 </table>
               </div>
+              {showEmployeeSelfRating && (
               <div className="mt-4 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm">
                 <p>
                   <span className="font-medium">Capability average</span> — Self:{" "}
@@ -957,7 +1334,7 @@ function AppraisalDetailInner({
                     ? `${capSelfAvg.toFixed(2)} (${ratingLabel(Math.min(5, Math.max(1, Math.round(capSelfAvg))))})`
                     : "—"}
                 </p>
-                {(isManager || appraisal.status !== "draft") && (
+                {isManager && (
                   <p className="mt-1">
                     Manager:{" "}
                     {capMgrAvg != null
@@ -966,16 +1343,11 @@ function AppraisalDetailInner({
                   </p>
                 )}
               </div>
+              )}
               </>
             )}
                   </section>
                 </div>
-                {showAppraisalReferenceTools && !managerWaiting && (
-                  <ReferenceGuideButtons
-                    onRatingLegend={() => setRatingLegendOpen(true)}
-                    onNineBox={() => setNineBoxModalOpen(true)}
-                  />
-                )}
               </>
             ) : activeTab === "kpi" ? (
               <>
@@ -988,27 +1360,30 @@ function AppraisalDetailInner({
                 </p>
               ) : (
               <>
-              <div className="mb-2 flex flex-wrap items-center gap-x-3 gap-y-1">
+              <div className="mb-2">
                 <h2 className="text-lg font-semibold text-black">
                   Key Performance Indicators
                 </h2>
-                <RatingGuideModalTrigger label="Performance ratings (1–5) definitions" />
               </div>
               <p className="mb-4 text-sm text-zinc-600">
-                Up to {MAX_KPIS} KPIs in a list view: KPI, weight (%), due date,
-                and ratings. The KPI score below is{" "}
-                <strong>weighted</strong>: each row contributes{" "}
-                <strong>weight% × rating</strong>, summed and divided by total
-                weight% (1–5 scale).
+                {employeeKpiEditable
+                  ? `Add ${MIN_KPIS}–${MAX_KPIS} KPIs with weight (%) and due date. Submit when you have at least ${MIN_KPIS} KPIs and weights total 100% — your manager and HR are notified. Ratings come later at mid-year and annual review.`
+                  : `${MIN_KPIS}–${MAX_KPIS} KPIs. Mid-year and annual ratings appear in Review cycles after KPIs are submitted. The KPI score is weighted: each row contributes weight% × rating, summed and divided by total weight% (1–5 scale).`}
               </p>
               <div
                 className={`mb-3 text-sm ${weightsOk ? "text-emerald-700" : "text-amber-800"}`}
               >
                 Total weight: <strong>{weightTotal}%</strong>
-                {!weightsOk && employeeEditable && (
+                {!weightsOk && employeeKpiEditable && (
                   <span> — adjust to 100% before submit.</span>
                 )}
-                {employeeEditable &&
+                {employeeKpiEditable && draft!.kpis.length < MIN_KPIS && (
+                  <span className="ml-1">
+                    Add at least {MIN_KPIS} KPIs before submit (
+                    {draft!.kpis.length}/{MIN_KPIS}).
+                  </span>
+                )}
+                {employeeKpiEditable &&
                   draft!.kpis.some((k) => (Number(k.weightPercent) || 0) <= 0) && (
                     <span className="ml-1">
                       Each KPI needs a weight greater than 0%.
@@ -1016,7 +1391,7 @@ function AppraisalDetailInner({
                   )}
               </div>
               <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
-                <table className="w-full min-w-4xl border-collapse text-left text-sm">
+                <table className="w-full min-w-[52rem] border-collapse text-left text-sm">
                   <thead>
                     <tr className="border-b border-zinc-200 bg-zinc-100 text-xs font-semibold uppercase tracking-wide text-zinc-700">
                       <th className="w-10 px-2 py-2.5" scope="col">
@@ -1031,28 +1406,24 @@ function AppraisalDetailInner({
                       <th className="w-12 px-2 py-2.5" scope="col">
                         No.
                       </th>
-                      <th className="min-w-56 px-2 py-2.5" scope="col">
+                      <th className="min-w-52 px-2 py-2.5" scope="col">
                         KPI <span className="text-red-600">*</span>
                       </th>
                       <th className="w-24 px-2 py-2.5" scope="col">
                         Weight (%) <span className="text-red-600">*</span>
                       </th>
-                      <th className="w-36 px-2 py-2.5" scope="col">
+                      <th className="w-32 px-2 py-2.5" scope="col">
                         Due date
                       </th>
-                      <th className="min-w-36 px-2 py-2.5" scope="col">
-                        Employee rating{" "}
-                        <span className="text-red-600">*</span>
-                      </th>
-                      {(isManager || appraisal.status !== "draft") && (
-                        <th className="min-w-36 px-2 py-2.5" scope="col">
-                          Manager rating
-                          {managerCanReview && (
-                            <span className="text-red-600"> *</span>
-                          )}
+                      {showReviewCycles && (
+                        <th className="min-w-[22rem] px-2 py-2.5" scope="col">
+                          Review cycles
+                          <span className="mt-0.5 block font-normal normal-case tracking-normal text-zinc-500">
+                            Mid-Year and Annual stacked per KPI
+                          </span>
                         </th>
                       )}
-                      {employeeEditable && (
+                      {employeeKpiEditable && (
                         <th className="w-16 px-2 py-2.5" scope="col">
                           <span className="sr-only">Actions</span>
                         </th>
@@ -1077,7 +1448,7 @@ function AppraisalDetailInner({
                           {i + 1}
                         </td>
                         <td className="px-2 py-2">
-                          {employeeEditable ? (
+                          {employeeKpiEditable ? (
                             <textarea
                               className={`${inputEnterprise} min-h-18 resize-y text-sm`}
                               rows={3}
@@ -1099,7 +1470,7 @@ function AppraisalDetailInner({
                           )}
                         </td>
                         <td className="px-2 py-2">
-                          {employeeEditable ? (
+                          {employeeKpiEditable ? (
                             <input
                               type="number"
                               min={0}
@@ -1127,7 +1498,7 @@ function AppraisalDetailInner({
                           )}
                         </td>
                         <td className="px-2 py-2">
-                          {employeeEditable ? (
+                          {employeeKpiEditable ? (
                             <input
                               type="date"
                               className="w-full rounded-md border border-zinc-200 bg-white px-2 py-1.5 text-sm text-black shadow-sm outline-none focus:border-zinc-400 focus:ring-1 focus:ring-zinc-200"
@@ -1144,48 +1515,169 @@ function AppraisalDetailInner({
                             />
                           ) : (
                             <span className="text-black">
-                              {kpi.dueDate || "—"}
+                              {formatDueDateDisplay(kpi.dueDate)}
                             </span>
                           )}
                         </td>
-                        <td className="px-2 py-2">
-                          {employeeEditable ? (
-                            <RatingSelect
-                              className="[&_span]:hidden"
-                              value={kpi.selfRating}
-                              onChange={(n) => {
-                                if (!draft) return;
-                                const kpis = [...draft.kpis];
-                                kpis[i] = { ...kpis[i], selfRating: n };
-                                setDraft({ ...draft, kpis });
-                              }}
-                            />
-                          ) : (
-                            <RatingReadOnly value={kpi.selfRating} />
-                          )}
-                        </td>
-                        {(isManager || appraisal.status !== "draft") && (
+                        {showReviewCycles && (
                           <td className="px-2 py-2">
-                            {managerCanReview && managerKpiDraft ? (
-                              <RatingSelect
-                                className="[&_span]:hidden"
-                                value={managerKpiDraft[i].managerRating}
-                                onChange={(n) => {
-                                  const next = [...managerKpiDraft];
-                                  next[i] = { ...next[i], managerRating: n };
-                                  setManagerKpiDraft(next);
-                                }}
-                              />
-                            ) : kpi.managerRating != null ? (
-                              <RatingReadOnly value={kpi.managerRating} />
-                            ) : (
-                              <span className="text-sm text-zinc-400">—</span>
-                            )}
+                            <div className="divide-y divide-zinc-200 overflow-hidden rounded-lg border border-zinc-200">
+                              <div className="bg-gold-50/50 px-2.5 py-2.5">
+                                <p
+                                  className={`${REVIEW_CYCLE_SECTION_TITLE} text-gold-700`}
+                                >
+                                  Mid-Year
+                                  {(employeeMidYearEditable ||
+                                    managerCanMidYear) && (
+                                    <span className="text-red-600"> *</span>
+                                  )}
+                                </p>
+                                <div className={REVIEW_CYCLE_GRID}>
+                                  <div>
+                                    <p className={REVIEW_CYCLE_SUBLABEL}>
+                                      Employee
+                                    </p>
+                                    <div className={REVIEW_CYCLE_VALUE}>
+                                      {employeeMidYearEditable ? (
+                                        <select
+                                          aria-label={`Mid-year rating for KPI ${i + 1}`}
+                                          className="w-full rounded-md border border-zinc-300 bg-white px-2 py-1.5 text-sm"
+                                          value={kpi.midYearRating ?? ""}
+                                          onChange={(e) => {
+                                            if (!draft) return;
+                                            const kpis = [...draft.kpis];
+                                            kpis[i] = {
+                                              ...kpis[i],
+                                              midYearRating: (e.target
+                                                .value ||
+                                                null) as MidYearRating | null,
+                                            };
+                                            setDraft({ ...draft, kpis });
+                                          }}
+                                        >
+                                          <option value="">Select</option>
+                                          {MID_YEAR_RATING_OPTIONS.map((r) => (
+                                            <option key={r} value={r}>
+                                              {MID_YEAR_RATING_LABELS[r]}
+                                            </option>
+                                          ))}
+                                        </select>
+                                      ) : (
+                                        <MidYearRatingBadge
+                                          rating={kpi.midYearRating}
+                                        />
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <p className={REVIEW_CYCLE_SUBLABEL}>
+                                      Manager Comments
+                                    </p>
+                                    <div className={REVIEW_CYCLE_VALUE}>
+                                      {managerCanMidYear && midYearDraft ? (
+                                        <textarea
+                                          rows={2}
+                                          className={`${inputEnterprise} min-h-12 resize-y text-sm`}
+                                          placeholder="Mid-year comment…"
+                                          value={
+                                            midYearDraft[i]?.midYearComment ??
+                                            ""
+                                          }
+                                          onChange={(e) => {
+                                            const next = [...midYearDraft];
+                                            next[i] = {
+                                              ...next[i],
+                                              midYearComment: e.target.value,
+                                            };
+                                            setMidYearDraft(next);
+                                          }}
+                                        />
+                                      ) : (
+                                        <p className="whitespace-pre-wrap text-sm text-zinc-700">
+                                          {kpi.midYearComment?.trim()
+                                            ? kpi.midYearComment
+                                            : "—"}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                              {showAnnualReview && (
+                              <div className="bg-navy-50/40 px-2.5 py-2.5">
+                                <p
+                                  className={`${REVIEW_CYCLE_SECTION_TITLE} text-navy-800`}
+                                >
+                                  Annual
+                                  {(employeeAnnualEditable || managerCanReview) && (
+                                    <span className="text-red-600"> *</span>
+                                  )}
+                                </p>
+                                <div className={REVIEW_CYCLE_GRID}>
+                                  <div>
+                                    <p className={REVIEW_CYCLE_SUBLABEL}>
+                                      Employee
+                                    </p>
+                                    <div className={REVIEW_CYCLE_VALUE}>
+                                      {employeeAnnualEditable ? (
+                                        <RatingSelect
+                                          className="[&_span]:hidden"
+                                          value={kpi.selfRating}
+                                          onChange={(n) => {
+                                            if (!draft) return;
+                                            const kpis = [...draft.kpis];
+                                            kpis[i] = {
+                                              ...kpis[i],
+                                              selfRating: n,
+                                            };
+                                            setDraft({ ...draft, kpis });
+                                          }}
+                                        />
+                                      ) : kpi.selfRating != null ? (
+                                        <RatingReadOnly value={kpi.selfRating} />
+                                      ) : (
+                                        <span className="text-zinc-400">—</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                  <div>
+                                    <p className={REVIEW_CYCLE_SUBLABEL}>
+                                      Manager
+                                    </p>
+                                    <div className={REVIEW_CYCLE_VALUE}>
+                                      {managerCanReview && managerKpiDraft ? (
+                                        <RatingSelect
+                                          className="[&_span]:hidden"
+                                          value={
+                                            managerKpiDraft[i].managerRating
+                                          }
+                                          onChange={(n) => {
+                                            const next = [...managerKpiDraft];
+                                            next[i] = {
+                                              ...next[i],
+                                              managerRating: n,
+                                            };
+                                            setManagerKpiDraft(next);
+                                          }}
+                                        />
+                                      ) : kpi.managerRating != null ? (
+                                        <RatingReadOnly
+                                          value={kpi.managerRating}
+                                        />
+                                      ) : (
+                                        <span className="text-zinc-400">—</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                              )}
+                            </div>
                           </td>
                         )}
-                        {employeeEditable && (
+                        {employeeKpiEditable && (
                           <td className="px-2 py-2 text-center">
-                            {draft!.kpis.length > 1 ? (
+                            {draft!.kpis.length > MIN_KPIS ? (
                               <button
                                 type="button"
                                 className="text-xs font-medium text-red-600 hover:underline"
@@ -1208,7 +1700,7 @@ function AppraisalDetailInner({
                   </tbody>
                 </table>
               </div>
-              {employeeEditable && draft!.kpis.length < MAX_KPIS && (
+              {employeeKpiEditable && draft!.kpis.length < MAX_KPIS && (
                 <button
                   type="button"
                   className="mt-2 rounded border border-zinc-200 bg-zinc-100 px-3 py-2 text-sm font-medium text-zinc-800 shadow-sm hover:bg-zinc-200/80"
@@ -1222,38 +1714,48 @@ function AppraisalDetailInner({
                   Add Row ({draft!.kpis.length}/{MAX_KPIS})
                 </button>
               )}
-              <div className="mt-4 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm">
-                <p>
-                  <span className="font-medium">
-                    KPI performance (weighted score)
-                  </span>{" "}
-                  — Self:{" "}
-                  {kpiSelfScore != null
-                    ? `${kpiSelfScore.toFixed(2)} (${ratingLabel(Math.min(5, Math.max(1, Math.round(kpiSelfScore))))})`
-                    : "—"}
-                </p>
-                {(isManager || appraisal.status !== "draft") && (
-                  <p className="mt-1">
-                    Manager:{" "}
-                    {kpiMgrScore != null
-                      ? `${kpiMgrScore.toFixed(2)} (${ratingLabel(Math.min(5, Math.max(1, Math.round(kpiMgrScore))))})`
-                      : "—"}
-                  </p>
-                )}
+              {showKpiRatingsSummary && (
+              <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                <h3 className="text-sm font-semibold text-navy-950">
+                  KPI ratings summary
+                </h3>
+                <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-lg border border-slate-200 bg-white px-3.5 py-3">
+                    <dt className="text-xs font-medium text-slate-500">
+                      Employee Self Rating
+                    </dt>
+                    <dd className="mt-1 text-sm font-semibold text-navy-950">
+                      {kpiSelfScore != null
+                        ? ratingLabel(
+                            Math.min(5, Math.max(1, Math.round(kpiSelfScore)))
+                          )
+                        : "—"}
+                    </dd>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-white px-3.5 py-3">
+                    <dt className="text-xs font-medium text-slate-500">
+                      Manager Rating
+                    </dt>
+                    <dd className="mt-1 text-sm font-semibold text-navy-950">
+                      {(isManager || appraisal.status !== "draft") &&
+                      kpiMgrScore != null
+                        ? ratingLabel(
+                            Math.min(5, Math.max(1, Math.round(kpiMgrScore)))
+                          )
+                        : "—"}
+                    </dd>
+                  </div>
+                </dl>
               </div>
-              {appraisal.status !== "draft" && (
-                <BranchManagerCommentsSection />
+              )}
+
+              {(isManager || isHr) && appraisal.status !== "draft" && (
+                <FeedbackSection />
               )}
               </>
               )}
             </section>
                 </div>
-                {showAppraisalReferenceTools && !managerWaiting && (
-                  <ReferenceGuideButtons
-                    onRatingLegend={() => setRatingLegendOpen(true)}
-                    onNineBox={() => setNineBoxModalOpen(true)}
-                  />
-                )}
               </>
             ) : (
             <div className="rounded-xl border border-zinc-200/80 bg-white p-6 shadow-sm">
@@ -1275,7 +1777,7 @@ function AppraisalDetailInner({
                   />
                   <HrReadonlyField
                     label="Employee"
-                    value={identity.employeeName}
+                    value={identity.englishName || identity.employeeName}
                     required
                   />
                   <HrReadonlyField
@@ -1289,7 +1791,7 @@ function AppraisalDetailInner({
                     required
                   />
                   <HrReadonlyField
-                    label="M level"
+                    label="Level Grade"
                     value={
                       M_LEVEL_LABELS[identity.mLevel] ?? `L${identity.mLevel}`
                     }
@@ -1340,7 +1842,7 @@ function AppraisalDetailInner({
 
               <div className="rounded-lg border border-zinc-200 bg-zinc-50/70 p-4">
                 <h3 className="text-base font-semibold text-black">
-                  Overall performance rating
+                  Overall review summary
                 </h3>
                 <p className="mt-2 text-sm text-zinc-600">
                   Weighted KPI score and capability average (each on a 1–5
@@ -1400,77 +1902,50 @@ function AppraisalDetailInner({
                       Manager overall:{" "}
                       {computedManagerOverallLabel ?? "—"}
                     </p>
-                    {managerOverallOverrideActive != null && (
-                      <p className="mt-1 text-base font-semibold text-violet-900">
-                        Adjusted overall: {finalManagerOverallLabel}
-                      </p>
-                    )}
-                    {managerCanReview && (
+                    {managerCanReview ? (
                       <div className="mt-3">
-                        <button
-                          type="button"
-                          onClick={() =>
-                            setManagerOverallModifyOpen((open) => !open)
-                          }
-                          aria-expanded={managerOverallModifyOpen}
-                          className="inline-flex items-center gap-1.5 rounded-md border border-zinc-200 bg-white px-2.5 py-1.5 text-sm font-medium text-zinc-700 shadow-sm hover:bg-zinc-50"
+                        <label
+                          htmlFor="overall-final-rating-override"
+                          className="mb-1.5 block text-sm font-bold text-red-600"
                         >
-                          <svg
-                            className="h-4 w-4 shrink-0"
-                            fill="none"
-                            viewBox="0 0 24 24"
-                            stroke="currentColor"
-                            strokeWidth={2}
-                            aria-hidden
-                          >
-                            <path
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"
-                            />
-                          </svg>
-                          Adjust
-                        </button>
-                        {managerOverallModifyOpen && (
-                          <div className="mt-3 rounded-lg border border-zinc-200 bg-white p-4">
-                            <p className="text-sm font-medium text-black">
-                              Adjust overall rating
-                            </p>
-                            <p className="mt-1 text-xs text-zinc-600">
-                              Override the calculated score if you believe the
-                              employee deserves a different overall rating.
-                            </p>
-                            <label
-                              htmlFor="manager-overall-override"
-                              className="mt-3 mb-1.5 block text-xs font-medium text-zinc-600"
-                            >
-                              Final overall rating
-                            </label>
-                            <select
-                              id="manager-overall-override"
-                              className="w-full max-w-md rounded-md border border-zinc-300 bg-white px-3 py-2 text-sm text-black"
-                              value={
-                                managerOverallOverrideDraft == null
-                                  ? ""
-                                  : String(managerOverallOverrideDraft)
-                              }
-                              onChange={(e) => {
-                                const v = e.target.value;
-                                setManagerOverallOverrideDraft(
-                                  v === "" ? null : Number(v)
-                                );
-                              }}
-                            >
-                              <option value="">Use calculated score</option>
-                              {RATING_OPTIONS.map((n) => (
-                                <option key={n} value={n}>
-                                  {n} — {ratingLabel(n)}
-                                </option>
-                              ))}
-                            </select>
-                          </div>
-                        )}
+                          Final Rating
+                        </label>
+                        <select
+                          id="overall-final-rating-override"
+                          className="w-full max-w-md rounded-lg border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 shadow-sm outline-none focus:border-red-400 focus:ring-2 focus:ring-red-200"
+                          value={
+                            managerOverallOverrideDraft == null
+                              ? ""
+                              : String(managerOverallOverrideDraft)
+                          }
+                          onChange={(e) => {
+                            const v = e.target.value;
+                            setManagerOverallOverrideDraft(
+                              v === "" ? null : Number(v)
+                            );
+                          }}
+                        >
+                          <option value="">
+                            {computedManagerOverallLabel
+                              ? `Use calculated (${computedManagerOverallLabel})`
+                              : "Use calculated rating"}
+                          </option>
+                          {RATING_OPTIONS.map((n) => (
+                            <option key={n} value={n}>
+                              {ratingLabel(n)}
+                            </option>
+                          ))}
+                        </select>
+                        <p className="mt-1.5 text-xs text-slate-500">
+                          Adjust if the final rating should differ from the
+                          calculated manager overall. Saved when you submit the
+                          manager review.
+                        </p>
                       </div>
+                    ) : (
+                      <p className="mt-1 text-base font-bold text-red-600">
+                        Final Rating: {finalManagerOverallLabel ?? "—"}
+                      </p>
                     )}
                   </div>
                 )}
@@ -1504,16 +1979,16 @@ function AppraisalDetailInner({
                 </p>
                 <BigField
                   label="Employee comments"
-                  readOnly={!employeeEditable || isManager}
+                  readOnly={!employeeCanEditComments || isManager}
                   readOnlyMuted={isManager}
                   textareaClassName={inputEnterprise}
                   value={
-                    employeeEditable && !isManager
+                    employeeCanEditComments && !isManager
                       ? draft!.employeeComments
                       : appraisal.employeeComments
                   }
                   onChange={(v) =>
-                    employeeEditable &&
+                    employeeCanEditComments &&
                     !isManager &&
                     draft &&
                     setDraft({ ...draft, employeeComments: v })
@@ -1590,44 +2065,48 @@ function AppraisalDetailInner({
         open={nineBoxModalOpen}
         onClose={() => setNineBoxModalOpen(false)}
       />
-      <CapabilityAppendixModal
-        open={capabilityAppendixOpen}
-        onClose={() => setCapabilityAppendixOpen(false)}
-      />
-    </div>
+    </AppShell>
   );
 }
 
-function BranchManagerCommentsSection() {
+/**
+ * Feedback from authorised reviewers (Branch Manager / Team Leader / Manager).
+ * Visible to the direct manager and HR only — never to the employee.
+ */
+function FeedbackSection() {
   const [open, setOpen] = useState(false);
   const count = DEMO_BRANCH_MANAGER_COMMENTS.length;
   const preview = DEMO_BRANCH_MANAGER_COMMENTS[0];
 
   return (
-    <section className="mt-4 rounded-lg border border-zinc-200 bg-white">
+    <section className="mt-5 overflow-hidden rounded-xl border border-slate-200 bg-white">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-zinc-50"
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-navy-50/40"
       >
         <div className="min-w-0">
-          <p className="text-sm font-semibold text-black">
-            Branch manager comments
+          <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-navy-950">
+            Feedback
+            <span className="rounded-full border border-navy-200 bg-navy-50 px-2 py-0.5 text-[11px] font-medium text-navy-800">
+              Visible to direct manager &amp; HR only
+            </span>
           </p>
           {!open && preview ? (
-            <p className="mt-0.5 truncate text-xs text-zinc-500">
-              {count} comment{count === 1 ? "" : "s"} —{" "}
-              {preview.branch}: {preview.comment}
+            <p className="mt-0.5 truncate text-xs text-slate-500">
+              {count} note{count === 1 ? "" : "s"} — {preview.branch}:{" "}
+              {preview.comment}
             </p>
           ) : (
-            <p className="mt-0.5 text-xs text-zinc-500">
-              {count} comment{count === 1 ? "" : "s"} (demo data)
+            <p className="mt-0.5 text-xs text-slate-500">
+              {count} note{count === 1 ? "" : "s"} from authorised reviewers
+              (demo data)
             </p>
           )}
         </div>
         <svg
-          className={`h-4 w-4 shrink-0 text-zinc-500 transition-transform ${open ? "rotate-180" : ""}`}
+          className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`}
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -1638,27 +2117,27 @@ function BranchManagerCommentsSection() {
         </svg>
       </button>
       {open && (
-        <ul className="space-y-3 border-t border-zinc-200 px-4 py-4">
+        <ul className="space-y-3 border-t border-slate-100 px-4 py-4">
           {DEMO_BRANCH_MANAGER_COMMENTS.map((item) => (
             <li
               key={item.id}
-              className="rounded-md border border-zinc-100 bg-zinc-50/80 px-3 py-3"
+              className="rounded-lg border border-slate-100 bg-slate-50/80 px-3.5 py-3"
             >
               <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <p className="text-sm font-medium text-black">
+                <p className="text-sm font-medium text-navy-950">
                   {item.branch}
                 </p>
                 <time
-                  className="text-xs text-zinc-500"
+                  className="text-xs text-slate-500"
                   dateTime={item.recordedAt}
                 >
                   {item.recordedAt}
                 </time>
               </div>
-              <p className="mt-0.5 text-xs text-zinc-600">
+              <p className="mt-0.5 text-xs text-slate-500">
                 {item.managerName} · {item.role}
               </p>
-              <p className="mt-2 text-sm leading-relaxed text-zinc-800">
+              <p className="mt-2 text-sm leading-relaxed text-navy-950/90">
                 {item.comment}
               </p>
             </li>
@@ -1666,6 +2145,22 @@ function BranchManagerCommentsSection() {
         </ul>
       )}
     </section>
+  );
+}
+
+function MidYearRatingBadge({ rating }: { rating: MidYearRating | null }) {
+  if (rating == null) {
+    return <span className="text-sm text-slate-400">—</span>;
+  }
+  const tone: Record<MidYearRating, string> = {
+    on_track: "text-emerald-800",
+    not_on_track: "text-red-700",
+    early_access: "text-navy-800",
+  };
+  return (
+    <span className={`text-sm font-medium ${tone[rating]}`}>
+      {MID_YEAR_RATING_LABELS[rating]}
+    </span>
   );
 }
 
@@ -1695,9 +2190,10 @@ function TabStepNav({
           type="button"
           onClick={() => onTabChange(prev[0])}
           title={`Go to ${prev[1]}`}
-          className="rounded-lg border border-zinc-300 bg-white px-3 py-1.5 text-sm font-medium text-black shadow-sm hover:bg-zinc-50"
+          aria-label={`Go to ${prev[1]}`}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300 bg-white text-sm font-medium text-navy-950 shadow-sm transition hover:border-navy-300"
         >
-          ← Back
+          ←
         </button>
       ) : null}
       {next ? (
@@ -1705,9 +2201,10 @@ function TabStepNav({
           type="button"
           onClick={() => onTabChange(next[0])}
           title={`Go to ${next[1]}`}
-          className="rounded-lg bg-zinc-900 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-zinc-800"
+          aria-label={`Go to ${next[1]}`}
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-r from-navy-900 to-navy-700 text-sm font-medium text-white shadow-sm transition hover:from-navy-800 hover:to-navy-600"
         >
-          Next →
+          →
         </button>
       ) : null}
     </nav>

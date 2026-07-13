@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAppraisal, updateAppraisal } from "@/lib/appraisal-store";
-import { DEMO_MANAGER } from "@/lib/mock-users";
+import { DEMO_HR, DEMO_MANAGER } from "@/lib/mock-users";
 import {
   addReviewPendingNotification,
   removeNotificationsForAppraisal,
@@ -10,8 +10,14 @@ import type {
   CapabilityId,
   CapabilityRow,
   KpiRow,
+  MidYearRating,
 } from "@/lib/types";
-import { CAPABILITY_ORDER, MAX_KPIS } from "@/lib/types";
+import {
+  CAPABILITY_ORDER,
+  MAX_KPIS,
+  MIN_KPIS,
+  MID_YEAR_RATING_OPTIONS,
+} from "@/lib/types";
 import { sumKpiWeights } from "@/lib/kpi-utils";
 
 function parseOptionalRating(raw: unknown): number | null {
@@ -23,14 +29,15 @@ function parseOptionalRating(raw: unknown): number | null {
   return r;
 }
 
-function employeeSubmitValidationError(
-  kpis: KpiRow[],
-  capabilities: CapabilityRow[]
-): string | null {
+/** Initial KPI lock — weights and KPI text only; no self-ratings yet. */
+function employeeKpiSubmitValidationError(kpis: KpiRow[]): string | null {
+  if (kpis.length < MIN_KPIS) {
+    return `Add at least ${MIN_KPIS} KPIs before submitting.`;
+  }
+  if (kpis.length > MAX_KPIS) {
+    return `Maximum ${MAX_KPIS} KPIs.`;
+  }
   for (const k of kpis) {
-    if (k.selfRating == null) {
-      return "Select a self rating for every KPI before submitting.";
-    }
     if ((Number(k.weightPercent) || 0) <= 0) {
       return "Each KPI must have a weight greater than 0%.";
     }
@@ -39,9 +46,32 @@ function employeeSubmitValidationError(
   if (Math.abs(total - 100) >= 0.01) {
     return "KPI weights must total exactly 100% before submitting.";
   }
+  return null;
+}
+
+function employeeAnnualSubmitValidationError(
+  kpis: KpiRow[],
+  capabilities: CapabilityRow[]
+): string | null {
+  for (const k of kpis) {
+    if (k.selfRating == null) {
+      return "Select a self rating for every KPI before submitting.";
+    }
+  }
   for (const c of capabilities) {
     if (c.selfRating == null) {
       return "Select a self rating for every capability before submitting.";
+    }
+  }
+  return null;
+}
+
+function employeeMidYearSubmitValidationError(
+  lines: { midYearRating: MidYearRating | null }[]
+): string | null {
+  for (const l of lines) {
+    if (l.midYearRating == null) {
+      return "Select On Track / Not on Track for every KPI before submitting your mid-year review.";
     }
   }
   return null;
@@ -79,8 +109,18 @@ function isEmployeePayload(x: unknown): x is EmployeePayload {
   );
 }
 
-function normalizeKpisFromEmployee(rows: unknown[]): KpiRow[] {
-  return rows.slice(0, MAX_KPIS).map((row) => {
+function parseMidYearRating(raw: unknown): MidYearRating | null {
+  return MID_YEAR_RATING_OPTIONS.includes(raw as MidYearRating)
+    ? (raw as MidYearRating)
+    : null;
+}
+
+/** Mid-year fields are manager-owned: keep the stored values, not the payload's. */
+function normalizeKpisFromEmployee(
+  rows: unknown[],
+  current: KpiRow[]
+): KpiRow[] {
+  return rows.slice(0, MAX_KPIS).map((row, i) => {
     const r = row as Record<string, unknown>;
     return {
       goalsAndKpis: String(r.goalsAndKpis ?? ""),
@@ -92,22 +132,31 @@ function normalizeKpisFromEmployee(rows: unknown[]): KpiRow[] {
       selfRating: parseOptionalRating(r.selfRating),
       managerRating: null,
       managerComments: "",
+      midYearRating: current[i]?.midYearRating ?? null,
+      midYearComment: current[i]?.midYearComment ?? "",
     };
   });
 }
 
-function normalizeCapabilitiesFromEmployee(rows: unknown[]): CapabilityRow[] {
+function normalizeCapabilitiesFromEmployee(
+  rows: unknown[],
+  current: CapabilityRow[] = []
+): CapabilityRow[] {
+  const currentById = new Map(current.map((c) => [c.id, c]));
   const byId = new Map<CapabilityId, CapabilityRow>();
   if (Array.isArray(rows)) {
     for (const row of rows) {
       const r = row as Record<string, unknown>;
       const id = r.id as CapabilityId;
       if (!CAPABILITY_ORDER.includes(id)) continue;
+      const prev = currentById.get(id);
       byId.set(id, {
         id,
         selfRating: parseOptionalRating(r.selfRating),
         managerRating: null,
         managerComments: "",
+        midYearRating: prev?.midYearRating ?? null,
+        midYearComment: prev?.midYearComment ?? "",
       });
     }
   }
@@ -118,6 +167,8 @@ function normalizeCapabilitiesFromEmployee(rows: unknown[]): CapabilityRow[] {
         selfRating: null,
         managerRating: null,
         managerComments: "",
+        midYearRating: currentById.get(id)?.midYearRating ?? null,
+        midYearComment: currentById.get(id)?.midYearComment ?? "",
       }
     );
   });
@@ -164,6 +215,12 @@ export async function PATCH(
         { status: 400 }
       );
     }
+    if (action === "employee_submit" && data.kpis.length < MIN_KPIS) {
+      return NextResponse.json(
+        { error: `Add at least ${MIN_KPIS} KPIs before submitting.` },
+        { status: 400 }
+      );
+    }
     if (data.capabilities.length !== CAPABILITY_ORDER.length) {
       return NextResponse.json(
         { error: "Invalid capabilities payload" },
@@ -171,11 +228,14 @@ export async function PATCH(
       );
     }
 
-    const kpis = normalizeKpisFromEmployee(data.kpis);
-    const capabilities = normalizeCapabilitiesFromEmployee(data.capabilities);
+    const kpisForValidation = normalizeKpisFromEmployee(data.kpis, []);
+    const capabilitiesForValidation = normalizeCapabilitiesFromEmployee(
+      data.capabilities,
+      []
+    );
 
     if (action === "employee_submit") {
-      const err = employeeSubmitValidationError(kpis, capabilities);
+      const err = employeeKpiSubmitValidationError(kpisForValidation);
       if (err) {
         return NextResponse.json({ error: err }, { status: 400 });
       }
@@ -185,6 +245,11 @@ export async function PATCH(
       if (current.status !== "draft") {
         return null;
       }
+      const kpis = normalizeKpisFromEmployee(data.kpis, current.kpis);
+      const capabilities = normalizeCapabilitiesFromEmployee(
+        data.capabilities,
+        current.capabilities
+      );
       const mLevel = Math.min(
         10,
         Math.max(1, Math.round(Number((data as { mLevel: unknown }).mLevel) || 3))
@@ -210,6 +275,10 @@ export async function PATCH(
         reviewingManagerId,
         managerOverallOverride: current.managerOverallOverride,
         status: action === "employee_submit" ? "submitted" : "draft",
+        midYearStatus:
+          action === "employee_submit" && current.midYearStatus === "not_started"
+            ? "draft"
+            : current.midYearStatus,
       };
     });
 
@@ -220,6 +289,137 @@ export async function PATCH(
       );
     }
     if (action === "employee_submit" && next.status === "submitted") {
+      const managerUserId = next.reviewingManagerId ?? DEMO_MANAGER.id;
+      await addReviewPendingNotification({
+        appraisalId: next.id,
+        managerUserId,
+        employeeName: next.employeeName,
+      });
+      /* Also notify HR that KPIs were submitted for this cycle. */
+      if (managerUserId !== DEMO_HR.id) {
+        await addReviewPendingNotification({
+          appraisalId: next.id,
+          managerUserId: DEMO_HR.id,
+          employeeName: next.employeeName,
+        });
+      }
+    }
+    return NextResponse.json(next);
+  }
+
+  if (
+    action === "employee_midyear_save" ||
+    action === "employee_midyear_submit"
+  ) {
+    const kpisPayload = (body as { kpis?: unknown }).kpis;
+    if (!Array.isArray(kpisPayload)) {
+      return NextResponse.json(
+        { error: "Invalid mid-year payload" },
+        { status: 400 }
+      );
+    }
+    const lines = kpisPayload.map((row) => {
+      const r = row as Record<string, unknown>;
+      return { midYearRating: parseMidYearRating(r.midYearRating) };
+    });
+
+    if (action === "employee_midyear_submit") {
+      const err = employeeMidYearSubmitValidationError(lines);
+      if (err) {
+        return NextResponse.json({ error: err }, { status: 400 });
+      }
+    }
+
+    const next = await updateAppraisal(id, (current) => {
+      if (current.status !== "submitted") {
+        return null;
+      }
+      if (current.midYearStatus === "completed") {
+        return null;
+      }
+      if (lines.length !== current.kpis.length) {
+        return null;
+      }
+      return {
+        ...current,
+        kpis: current.kpis.map((k, i) => ({
+          ...k,
+          midYearRating: lines[i]!.midYearRating,
+        })),
+        midYearStatus:
+          action === "employee_midyear_submit" ? "submitted" : "draft",
+      };
+    });
+
+    if (!next) {
+      return NextResponse.json(
+        {
+          error:
+            "Cannot save mid-year review: KPIs must be submitted first and mid-year must not be finalized.",
+        },
+        { status: 409 }
+      );
+    }
+    return NextResponse.json(next);
+  }
+
+  if (action === "employee_annual_save" || action === "employee_annual_submit") {
+    if (!isEmployeePayload(data)) {
+      return NextResponse.json({ error: "Invalid employee data" }, { status: 400 });
+    }
+    const kpisForValidation = normalizeKpisFromEmployee(data.kpis, []);
+    const capabilitiesForValidation = normalizeCapabilitiesFromEmployee(
+      data.capabilities,
+      []
+    );
+
+    if (action === "employee_annual_submit") {
+      const err = employeeAnnualSubmitValidationError(
+        kpisForValidation,
+        capabilitiesForValidation
+      );
+      if (err) {
+        return NextResponse.json({ error: err }, { status: 400 });
+      }
+    }
+
+    const next = await updateAppraisal(id, (current) => {
+      if (current.status !== "submitted") {
+        return null;
+      }
+      if (current.midYearStatus !== "completed") {
+        return null;
+      }
+      const kpis = current.kpis.map((k, i) => {
+        const row = (data.kpis[i] ?? {}) as Record<string, unknown>;
+        return {
+          ...k,
+          selfRating: parseOptionalRating(row.selfRating),
+        };
+      });
+      const capabilities = normalizeCapabilitiesFromEmployee(
+        data.capabilities,
+        current.capabilities
+      );
+
+      return {
+        ...current,
+        kpis,
+        capabilities,
+        employeeComments: data.employeeComments,
+      };
+    });
+
+    if (!next) {
+      return NextResponse.json(
+        {
+          error:
+            "Cannot save annual ratings: mid-year review must be completed first.",
+        },
+        { status: 409 }
+      );
+    }
+    if (action === "employee_annual_submit") {
       await addReviewPendingNotification({
         appraisalId: next.id,
         managerUserId: next.reviewingManagerId ?? DEMO_MANAGER.id,
@@ -270,6 +470,15 @@ export async function PATCH(
 
     const next = await updateAppraisal(id, (current) => {
       if (current.status !== "submitted" && current.status !== "reviewed") {
+        return null;
+      }
+      if (current.midYearStatus !== "completed") {
+        return null;
+      }
+      if (
+        current.kpis.some((k) => k.selfRating == null) ||
+        current.capabilities.some((c) => c.selfRating == null)
+      ) {
         return null;
       }
       if (
@@ -333,6 +542,96 @@ export async function PATCH(
         {
           error:
             "Cannot complete: appraisal must be reviewed by the manager first.",
+        },
+        { status: 409 }
+      );
+    }
+    return NextResponse.json(next);
+  }
+
+  if (action === "manager_midyear_save" || action === "manager_midyear_submit") {
+    const kpisPayload = (body as { kpis?: unknown }).kpis;
+    const capsPayload = (body as { capabilities?: unknown }).capabilities;
+    if (!Array.isArray(kpisPayload)) {
+      return NextResponse.json(
+        { error: "Invalid mid-year payload" },
+        { status: 400 }
+      );
+    }
+    const midYearManagerComments = String(
+      (body as { midYearManagerComments?: unknown }).midYearManagerComments ??
+        ""
+    );
+    const lines = kpisPayload.map((row) => {
+      const r = row as Record<string, unknown>;
+      return {
+        midYearComment: String(r.midYearComment ?? ""),
+      };
+    });
+
+    const capLines = Array.isArray(capsPayload)
+      ? capsPayload.map((row) => {
+          const r = row as Record<string, unknown>;
+          return {
+            midYearComment: String(r.midYearComment ?? ""),
+          };
+        })
+      : null;
+
+    if (
+      action === "manager_midyear_submit" &&
+      lines.some((l) => !l.midYearComment.trim())
+    ) {
+      return NextResponse.json(
+        {
+          error:
+            "Add a mid-year comment for every KPI before submitting the mid-year review.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const next = await updateAppraisal(id, (current) => {
+      /* Mid-year runs after the employee locks KPIs, before annual review. */
+      if (current.status !== "submitted" && current.status !== "reviewed") {
+        return null;
+      }
+      if (current.midYearStatus === "completed") {
+        return null;
+      }
+      if (lines.length !== current.kpis.length) {
+        return null;
+      }
+      if (capLines && capLines.length !== current.capabilities.length) {
+        return null;
+      }
+      if (
+        action === "manager_midyear_submit" &&
+        current.kpis.some((k) => k.midYearRating == null)
+      ) {
+        return null;
+      }
+      return {
+        ...current,
+        kpis: current.kpis.map((k, i) => ({
+          ...k,
+          midYearComment: lines[i]!.midYearComment,
+        })),
+        capabilities: current.capabilities.map((c, i) => ({
+          ...c,
+          midYearComment: capLines?.[i]?.midYearComment ?? c.midYearComment,
+        })),
+        midYearManagerComments,
+        midYearStatus:
+          action === "manager_midyear_submit" ? "completed" : current.midYearStatus,
+      };
+    });
+
+    if (!next) {
+      return NextResponse.json(
+        {
+          error:
+            "Cannot save mid-year review: the employee must submit KPIs first, and the appraisal must not be completed.",
         },
         { status: 409 }
       );

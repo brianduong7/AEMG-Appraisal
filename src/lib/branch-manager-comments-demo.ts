@@ -22,7 +22,7 @@ export const DEMO_BRANCH_MANAGER_COMMENTS: BranchManagerComment[] = [
     id: "bm-2",
     branch: "China Campus — Shanghai",
     managerName: "Wei Lin",
-    role: "Branch Manager",
+    role: "Team Leader",
     recordedAt: "2026-04-02",
     comment:
       "Strong collaboration with the ELICOS academic lead during the March intake. Attendance follow-up was proactive. Minor improvement area: faster turnaround on placement concern escalations.",
@@ -31,9 +31,18 @@ export const DEMO_BRANCH_MANAGER_COMMENTS: BranchManagerComment[] = [
     id: "bm-3",
     branch: "HQ Corporate Services — Sydney",
     managerName: "David Park",
-    role: "Regional Branch Manager",
+    role: "Manager",
     recordedAt: "2026-05-18",
     comment:
       "Supports cross-campus projects reliably and communicates risks early. Branch KPIs for student experience were met. Endorsed for continued development at current M level.",
+  },
+  {
+    id: "bm-4",
+    branch: "ADSC — Curriculum",
+    managerName: "Priya Nair",
+    role: "Other authorised reviewer",
+    recordedAt: "2026-05-28",
+    comment:
+      "Peer input from curriculum peer review: documentation quality is high; continue sharing rubrics with neighbouring campuses.",
   },
 ];

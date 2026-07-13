@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { AppLogo } from "@/components/app-logo";
 import { DEMO_BRANCH_MANAGER_COMMENT_REQUEST } from "@/lib/branch-manager-comment-form-demo";
+import { formatDueDateDisplay } from "@/lib/format-date";
 
 const inputClass =
   "w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-black shadow-sm outline-none transition focus:border-zinc-400 focus:ring-2 focus:ring-zinc-200";
@@ -117,7 +118,9 @@ export function BranchManagerCommentForm() {
                 <dt className="text-xs font-medium text-zinc-500">
                   Respond by
                 </dt>
-                <dd className="mt-0.5 text-black">{ctx.dueDate}</dd>
+                <dd className="mt-0.5 text-black">
+                  {formatDueDateDisplay(ctx.dueDate)}
+                </dd>
               </div>
             </dl>
 

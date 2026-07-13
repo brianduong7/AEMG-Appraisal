@@ -16,17 +16,19 @@ export function buildDemoSubmittedEmmaForMark(): Appraisal {
     selfRating: (3 + (i % 3)) as number,
     managerRating: null as number | null,
     managerComments: "",
+    midYearRating: null as number | null,
+    midYearComment: "",
   }));
   return migrateAppraisal({
     id: DEMO_EMMA_SUBMITTED_FOR_MARK_ID,
     ownerUserId: "emma",
     reviewingManagerId: "mark",
-    employeeName: "Emma",
+    employeeName: "Emma Thompson",
     englishName: "Emma Thompson",
     position: "Senior Analyst",
     department: "Corporate Finance",
     mLevel: 4,
-    managerName: "Mark",
+    managerName: "Mark Stevenson",
     entity: "HQ Corporate Services",
     status: "submitted",
     kpis: [
@@ -61,6 +63,78 @@ export function buildDemoSubmittedEmmaForMark(): Appraisal {
     capabilities,
     employeeComments:
       "Demo submission (pre-loaded): please add your manager ratings and comments below.",
+    managerComments: "",
+    managerOverallOverride: null,
+  });
+}
+
+/** Stable id — HR login’s own personal appraisal (My Appraisal sidebar). */
+export const DEMO_HR_PERSONAL_APPRAISAL_ID =
+  "00000000-0000-4000-8000-0000000000h1";
+
+/**
+ * Pre-seeded draft appraisal owned by the HR demo login so Super Admin can
+ * open “My Appraisal” as an employee for themselves.
+ */
+export function buildDemoHrPersonalAppraisal(): Appraisal {
+  const capabilities = CAPABILITY_ORDER.map((id) => ({
+    id,
+    selfRating: null as number | null,
+    managerRating: null as number | null,
+    managerComments: "",
+    midYearRating: null as number | null,
+    midYearComment: "",
+  }));
+  return migrateAppraisal({
+    id: DEMO_HR_PERSONAL_APPRAISAL_ID,
+    ownerUserId: "hr",
+    reviewingManagerId: null,
+    employeeName: "HR Manager",
+    englishName: "HR Manager",
+    position: "HR Business Partner",
+    department: "People & Culture",
+    mLevel: 5,
+    managerName: "David Park",
+    entity: "HQ Corporate Services",
+    status: "draft",
+    midYearStatus: "not_started",
+    kpis: [
+      {
+        goalsAndKpis:
+          "Deliver group appraisal cycle communications and completion tracking for all entities.",
+        weightPercent: 40,
+        dueDate: "2026-09-15",
+        selfRating: null,
+        managerRating: null,
+        managerComments: "",
+        midYearRating: null,
+        midYearComment: "",
+      },
+      {
+        goalsAndKpis:
+          "Partner with line managers on mid-year checkpoint readiness and calibration support.",
+        weightPercent: 35,
+        dueDate: "2026-09-30",
+        selfRating: null,
+        managerRating: null,
+        managerComments: "",
+        midYearRating: null,
+        midYearComment: "",
+      },
+      {
+        goalsAndKpis:
+          "Maintain People & Culture policy updates and HR helpdesk SLAs for the appraisal window.",
+        weightPercent: 25,
+        dueDate: "2026-12-31",
+        selfRating: null,
+        managerRating: null,
+        managerComments: "",
+        midYearRating: null,
+        midYearComment: "",
+      },
+    ],
+    capabilities,
+    employeeComments: "",
     managerComments: "",
     managerOverallOverride: null,
   });

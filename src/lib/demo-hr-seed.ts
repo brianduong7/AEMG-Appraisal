@@ -1,5 +1,11 @@
 import { migrateAppraisal } from "@/lib/migrate-appraisal";
-import type { Appraisal, CapabilityId, CapabilityRow, KpiRow } from "@/lib/types";
+import type {
+  Appraisal,
+  CapabilityId,
+  CapabilityRow,
+  KpiRow,
+  MidYearRating,
+} from "@/lib/types";
 import { CAPABILITY_ORDER } from "@/lib/types";
 
 /** Stable ids — one per ERP-style demo employee (HR inbox). */
@@ -16,13 +22,39 @@ export const DEMO_HR_SEED_IDS = {
   lisaTran: "00000000-0000-4000-8000-000000000017",
 } as const;
 
+const DEMO_MID_YEAR_ROTATION: MidYearRating[] = [
+  "on_track",
+  "on_track",
+  "not_on_track",
+  "early_access",
+];
+
+const DEMO_MID_YEAR_KPI_COMMENTS: Record<MidYearRating, string> = {
+  on_track:
+    "On track at mid-year — evidence reviewed in the one-on-one; keep current pace into H2.",
+  not_on_track:
+    "Not on track at mid-year — agreed recovery actions and a follow-up check-in before annual.",
+  early_access:
+    "Too early to access at mid-year — KPI timing lands in H2; revisit at annual review.",
+};
+
+const DEMO_MID_YEAR_CAP_COMMENTS = [
+  "Solid planning discipline through mid-year; maintain cadence.",
+  "Leadership presence growing — continue mentoring juniors in H2.",
+  "Budget ownership clear; flag any Q4 variance early.",
+  "Strategic priorities aligned after mid-year recalibration.",
+  "Communication with stakeholders has been consistent.",
+];
+
 function kpi(
   goalsAndKpis: string,
   weightPercent: number,
   dueDate: string,
   selfRating: number,
-  managerRating: number
+  managerRating: number,
+  kpiIndex = 0
 ): KpiRow {
+  const midYearRating = DEMO_MID_YEAR_ROTATION[kpiIndex % DEMO_MID_YEAR_ROTATION.length]!;
   return {
     goalsAndKpis,
     weightPercent,
@@ -30,6 +62,8 @@ function kpi(
     selfRating,
     managerRating,
     managerComments: "",
+    midYearRating,
+    midYearComment: DEMO_MID_YEAR_KPI_COMMENTS[midYearRating],
   };
 }
 
@@ -42,6 +76,9 @@ function capabilities(
     selfRating: self[i] ?? 3,
     managerRating: manager[i] ?? 3,
     managerComments: "",
+    /* Mid-year capability: manager comment only (no employee rating). */
+    midYearRating: null,
+    midYearComment: DEMO_MID_YEAR_CAP_COMMENTS[i] ?? "Mid-year capability note.",
   }));
 }
 
@@ -499,7 +536,30 @@ const DEMO_HR_COMPLETED_RAW: DemoHrSeedRaw[] = [
 ];
 
 export function buildDemoHrCompletedAppraisals(): Appraisal[] {
-  return DEMO_HR_COMPLETED_RAW.map((raw) => migrateAppraisal(raw));
+  return DEMO_HR_COMPLETED_RAW.map((raw) => {
+    const base = migrateAppraisal(raw);
+    return {
+      ...base,
+      midYearStatus: "completed" as const,
+      midYearManagerComments:
+        "Mid-year checkpoint held on schedule. KPIs reviewed one-on-one; priorities confirmed for the second half of the cycle.",
+      kpis: base.kpis.map((k, i) => {
+        const midYearRating =
+          DEMO_MID_YEAR_ROTATION[i % DEMO_MID_YEAR_ROTATION.length]!;
+        return {
+          ...k,
+          midYearRating,
+          midYearComment: DEMO_MID_YEAR_KPI_COMMENTS[midYearRating],
+        };
+      }),
+      capabilities: base.capabilities.map((c, i) => ({
+        ...c,
+        midYearRating: null,
+        midYearComment:
+          DEMO_MID_YEAR_CAP_COMMENTS[i] ?? "Mid-year capability note.",
+      })),
+    };
+  });
 }
 
 export function demoHrSeedOwnerIds(): string[] {

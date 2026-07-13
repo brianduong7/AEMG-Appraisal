@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { useState, type FormEvent } from "react";
 import { DEMO_HR, DEMO_MANAGER, findMockUser } from "@/lib/mock-users";
 import { AppLogo } from "@/components/app-logo";
@@ -8,10 +7,18 @@ import { useSession } from "@/contexts/session-context";
 
 const EMMA_ID = "emma" as const;
 
-/** Shown in the grey box and accepted on Login (password ignored for demo). */
+/** Shown in the demo box and accepted on Login (password ignored for demo). */
 const DEMO_EMPLOYEE_EMAIL = "emma@aemg.demo";
 const DEMO_MANAGER_EMAIL = "mark@aemg.demo";
 const DEMO_HR_EMAIL = "hr@aemg.demo";
+
+/**
+ * Shared promotional video (same asset on all AIFE portal login pages).
+ * Free stock clip — teacher with students in a classroom.
+ * Source: https://www.pexels.com/video/7092235/ (Pexels license, no attribution required).
+ */
+const PROMO_VIDEO_URL =
+  "https://videos.pexels.com/video-files/7092235/7092235-hd_1920_1080_30fps.mp4";
 
 function MailIcon({ className }: { className?: string }) {
   return (
@@ -82,136 +89,201 @@ export function LoginContent() {
     );
   }
 
+  function quickLogin(kind: "employee" | "manager" | "hr") {
+    if (kind === "employee") loginEmployee(EMMA_ID);
+    if (kind === "manager") loginManager();
+    if (kind === "hr") loginHr();
+  }
+
+  const inputShell =
+    "flex items-center gap-2.5 rounded-xl border border-navy-100 bg-navy-50/60 px-3.5 py-3 transition focus-within:border-navy-600 focus-within:bg-white focus-within:ring-2 focus-within:ring-navy-600/15";
+
   return (
-    <div className="flex min-h-full flex-col bg-[#F3F4F6] text-black">
-      <header className="border-b border-zinc-200/80 bg-white px-4 py-2.5">
-        <Link
-          href="/"
-          className="text-sm font-normal text-zinc-700 hover:text-zinc-900"
-        >
-          Home
-        </Link>
-      </header>
+    <div className="relative flex min-h-full flex-1 flex-col overflow-hidden bg-navy-950 text-white">
+      {/* Background: promo video under a navy brand overlay (gradient doubles as
+          the fallback while the video loads or if the CDN is unreachable). */}
+      <video
+        className="absolute inset-0 h-full w-full object-cover"
+        src={PROMO_VIDEO_URL}
+        autoPlay
+        muted
+        loop
+        playsInline
+        preload="metadata"
+        aria-hidden
+      />
+      <div
+        className="aife-hero-gradient absolute inset-0 opacity-[0.72]"
+        aria-hidden
+      />
+      <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col px-6 py-8 lg:py-12">
+        <header className="mb-10 flex items-center justify-between">
+          <AppLogo variant="login" href="/" className="drop-shadow-sm" />
+          <span className="hidden items-center gap-2 rounded-full border border-gold-400/40 bg-white/5 px-4 py-1.5 text-xs font-medium tracking-wide text-gold-300 sm:inline-flex">
+            <span className="h-1.5 w-1.5 rounded-full bg-gold-400" aria-hidden />
+            Performance Portal
+          </span>
+        </header>
 
-      <div className="flex flex-1 flex-col items-center justify-center px-4 py-10">
-        <div className="mb-6 flex flex-col items-center">
-          <AppLogo variant="login" href="/" className="mb-4" />
-          <h1 className="text-xl font-semibold tracking-tight text-zinc-900">
-            Login to AEMG Appraisal
-          </h1>
-        </div>
-
-        <div className="w-full max-w-[400px] rounded-xl bg-white p-8 shadow-sm">
-          <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-            <div className="flex items-center gap-2.5 rounded-[10px] bg-[#F0F0F0] px-3 py-2.5">
-              <MailIcon className="shrink-0 text-zinc-500" />
-              <input
-                id="login-email"
-                name="email"
-                type="email"
-                autoComplete="email"
-                placeholder="jane@example.com"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                className="min-w-0 flex-1 border-0 bg-transparent text-sm text-zinc-900 placeholder:text-zinc-500 outline-none"
-              />
-            </div>
-
-            <div className="flex items-center gap-2.5 rounded-[10px] bg-[#F0F0F0] px-3 py-2.5">
-              <LockIcon className="shrink-0 text-zinc-500" />
-              <input
-                id="login-password"
-                name="password"
-                type={showPassword ? "text" : "password"}
-                autoComplete="current-password"
-                placeholder="••••••••"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="min-w-0 flex-1 border-0 bg-transparent text-sm text-zinc-900 placeholder:text-zinc-500 outline-none"
-              />
-              <button
-                type="button"
-                className="shrink-0 text-xs font-medium text-zinc-500 hover:text-zinc-800"
-                onClick={() => setShowPassword((v) => !v)}
-              >
-                {showPassword ? "Hide" : "Show"}
-              </button>
-            </div>
-
-            <div className="flex justify-end">
-              <button
-                type="button"
-                className="text-xs text-zinc-500 hover:text-zinc-700"
-                onClick={() => {
-                  /* demo: no reset flow */
-                }}
-              >
-                Forgot Password?
-              </button>
-            </div>
-
-            {error ? (
-              <p className="text-xs text-red-600" role="alert">
-                {error}
-              </p>
-            ) : null}
-
-            <button
-              type="submit"
-              className="w-full rounded-[10px] bg-[#1A1A1A] py-2.5 text-sm font-medium text-white transition-colors hover:bg-zinc-800"
-            >
-              Login
-            </button>
-          </form>
-
-          <div className="my-5 flex items-center gap-3">
-            <div className="h-px flex-1 bg-zinc-200" aria-hidden />
-            <span className="shrink-0 text-xs text-zinc-500">or</span>
-            <div className="h-px flex-1 bg-zinc-200" aria-hidden />
+        <div className="grid flex-1 items-center gap-12 lg:grid-cols-[1.1fr_minmax(380px,440px)]">
+          {/* Brand hero */}
+          <div className="hidden lg:block">
+            <p className="mb-3 text-sm font-semibold uppercase tracking-[0.2em] text-gold-400">
+              Australia Institute of Future Education
+            </p>
+            <h1 className="max-w-xl text-4xl font-semibold leading-tight tracking-tight">
+              Grow with purpose.
+              <span className="mt-1 block bg-gradient-to-r from-gold-300 to-gold-500 bg-clip-text text-transparent">
+                Mid-year check-ins. Annual reviews. One portal.
+              </span>
+            </h1>
+            <p className="mt-4 max-w-lg text-sm leading-relaxed text-white/70">
+              Set your KPIs, track progress at the mid-year checkpoint, and
+              complete your annual appraisal — with your manager and HR in the
+              loop at every step.
+            </p>
           </div>
 
-          <button
-            type="button"
-            className="w-full cursor-default rounded-[10px] bg-[#F0F0F0] py-2.5 text-sm font-medium text-zinc-800"
-            title="Not available in this demo"
-          >
-            Login with Email Link
-          </button>
+          {/* Sign-in card */}
+          <div className="w-full justify-self-center lg:justify-self-end">
+            <div className="rounded-3xl bg-white p-8 text-[#0b1930] shadow-2xl ring-1 ring-white/40">
+              <h2 className="text-xl font-semibold tracking-tight text-navy-900">
+                Sign in
+              </h2>
+              <p className="mt-1 mb-6 text-sm text-slate-500">
+                Welcome back — access your appraisals.
+              </p>
+
+              <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+                <div className={inputShell}>
+                  <MailIcon className="shrink-0 text-navy-600" />
+                  <input
+                    id="login-email"
+                    name="email"
+                    type="email"
+                    autoComplete="email"
+                    placeholder="you@aife.edu.au"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    className="min-w-0 flex-1 border-0 bg-transparent text-sm text-navy-950 placeholder:text-slate-400 outline-none"
+                  />
+                </div>
+
+                <div className={inputShell}>
+                  <LockIcon className="shrink-0 text-navy-600" />
+                  <input
+                    id="login-password"
+                    name="password"
+                    type={showPassword ? "text" : "password"}
+                    autoComplete="current-password"
+                    placeholder="••••••••"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="min-w-0 flex-1 border-0 bg-transparent text-sm text-navy-950 placeholder:text-slate-400 outline-none"
+                  />
+                  <button
+                    type="button"
+                    className="shrink-0 text-xs font-medium text-navy-600 hover:text-navy-800"
+                    onClick={() => setShowPassword((v) => !v)}
+                  >
+                    {showPassword ? "Hide" : "Show"}
+                  </button>
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-navy-600 hover:text-navy-800"
+                    onClick={() => {
+                      /* demo: no reset flow */
+                    }}
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+
+                {error ? (
+                  <p className="text-xs text-red-600" role="alert">
+                    {error}
+                  </p>
+                ) : null}
+
+                <button
+                  type="submit"
+                  className="w-full rounded-xl bg-gradient-to-r from-navy-900 to-navy-700 py-3 text-sm font-semibold text-white shadow-lg shadow-navy-900/25 transition hover:from-navy-800 hover:to-navy-600"
+                >
+                  Sign in
+                </button>
+              </form>
+
+              <div className="my-5 flex items-center gap-3">
+                <div className="h-px flex-1 bg-slate-200" aria-hidden />
+                <span className="shrink-0 text-xs text-slate-400">
+                  demo accounts
+                </span>
+                <div className="h-px flex-1 bg-slate-200" aria-hidden />
+              </div>
+
+              <div className="grid gap-2">
+                <DemoAccountRow
+                  name={`${emma?.englishName || emma?.employeeName || "Emma Thompson"} · Employee`}
+                  email={DEMO_EMPLOYEE_EMAIL}
+                  onClick={() => quickLogin("employee")}
+                />
+                <DemoAccountRow
+                  name={`${DEMO_MANAGER.displayName} · Manager`}
+                  email={DEMO_MANAGER_EMAIL}
+                  onClick={() => quickLogin("manager")}
+                />
+                <DemoAccountRow
+                  name={`${DEMO_HR.displayName} · HR / Super Admin`}
+                  email={DEMO_HR_EMAIL}
+                  onClick={() => quickLogin("hr")}
+                />
+              </div>
+              <p className="mt-3 text-center text-[11px] text-slate-400">
+                Password is not checked in this demo — click a role to sign in.
+              </p>
+            </div>
+          </div>
         </div>
 
-        <div className="mt-4 w-full max-w-[400px] rounded-[10px] bg-[#F0F0F0] px-4 py-4 text-xs text-zinc-700">
-          <p className="mb-3 font-semibold text-zinc-900">Demo login</p>
-          <ul className="space-y-3">
-            <li>
-              <span className="font-medium text-zinc-900">
-                {emma?.employeeName ?? "Emma"} (employee)
-              </span>
-              <div className="mt-1 font-mono text-[11px] text-zinc-600">
-                <div>Email: {DEMO_EMPLOYEE_EMAIL}</div>
-                <div>Password: any (not checked)</div>
-              </div>
-            </li>
-            <li className="border-t border-zinc-300/80 pt-3">
-              <span className="font-medium text-zinc-900">
-                {DEMO_MANAGER.displayName} (manager)
-              </span>
-              <div className="mt-1 font-mono text-[11px] text-zinc-600">
-                <div>Email: {DEMO_MANAGER_EMAIL}</div>
-                <div>Password: any (not checked)</div>
-              </div>
-            </li>
-            <li className="border-t border-zinc-300/80 pt-3">
-              <span className="font-medium text-zinc-900">
-                {DEMO_HR.displayName} (HR)
-              </span>
-              <div className="mt-1 font-mono text-[11px] text-zinc-600">
-                <div>Email: {DEMO_HR_EMAIL}</div>
-                <div>Password: any (not checked)</div>
-              </div>
-            </li>
-          </ul>
-        </div>
+        <footer className="mt-10 flex flex-wrap items-center justify-between gap-2 text-xs text-white/45">
+          <span>© {new Date().getFullYear()} AIFE — AEMG Education Group</span>
+          <span className="inline-flex items-center gap-1.5">
+            <span className="h-1 w-6 rounded-full bg-gold-500" aria-hidden />
+            Blue &amp; Gold — one brand across every portal
+          </span>
+        </footer>
       </div>
     </div>
+  );
+}
+
+function DemoAccountRow({
+  name,
+  email,
+  onClick,
+}: {
+  name: string;
+  email: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group flex w-full items-center justify-between gap-3 rounded-xl border border-slate-200 bg-white px-3.5 py-2.5 text-left transition hover:border-gold-500/60 hover:bg-gold-50"
+    >
+      <span>
+        <span className="block text-sm font-medium text-navy-900">{name}</span>
+        <span className="block font-mono text-[11px] text-slate-500">
+          {email}
+        </span>
+      </span>
+      <span className="text-xs font-semibold text-navy-600 opacity-0 transition group-hover:opacity-100">
+        Sign in →
+      </span>
+    </button>
   );
 }

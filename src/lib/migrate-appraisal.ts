@@ -2,9 +2,36 @@ import type {
   Appraisal,
   CapabilityId,
   CapabilityRow,
+  CycleStatus,
   KpiRow,
+  MidYearRating,
 } from "./types";
 import { CAPABILITY_ORDER, ENTITY_OPTIONS } from "./types";
+import { findMockUser } from "./mock-users";
+
+function migrateMidYearRating(raw: unknown): MidYearRating | null {
+  if (raw === "on_track" || raw === "not_on_track" || raw === "early_access") {
+    return raw;
+  }
+  return null;
+}
+
+function migrateMidYearStatus(raw: unknown, annualStatus: unknown): CycleStatus {
+  /* A completed annual implies the mid-year checkpoint already passed —
+     legacy rows predate the mid-year cycle and must not report Not Started. */
+  if (annualStatus === "completed" && (raw == null || raw === "not_started")) {
+    return "completed";
+  }
+  if (
+    raw === "not_started" ||
+    raw === "draft" ||
+    raw === "submitted" ||
+    raw === "completed"
+  ) {
+    return raw;
+  }
+  return "not_started";
+}
 
 function clampLevel(n: number): number {
   return Math.min(10, Math.max(1, Math.round(n)));
@@ -30,6 +57,8 @@ function defaultCapabilities(): CapabilityRow[] {
     selfRating: null,
     managerRating: null,
     managerComments: "",
+    midYearRating: null,
+    midYearComment: "",
   }));
 }
 
@@ -49,6 +78,8 @@ function migrateKpiRow(raw: unknown): KpiRow {
           ? null
           : clampRating(o.managerRating, 3),
       managerComments: String(o.managerComments ?? ""),
+      midYearRating: migrateMidYearRating(o.midYearRating),
+      midYearComment: String(o.midYearComment ?? ""),
     };
   }
   const title = String(o.title ?? "");
@@ -64,6 +95,8 @@ function migrateKpiRow(raw: unknown): KpiRow {
         ? null
         : clampRating(o.managerRating, 3),
     managerComments: String(o.managerComments ?? ""),
+    midYearRating: migrateMidYearRating(o.midYearRating),
+    midYearComment: String(o.midYearComment ?? ""),
   };
 }
 
@@ -84,6 +117,8 @@ function migrateCapabilities(raw: unknown): CapabilityRow[] {
           ? null
           : clampRating(o.managerRating, 3),
       managerComments: String(o.managerComments ?? ""),
+      midYearRating: migrateSelfRating(o.midYearRating),
+      midYearComment: String(o.midYearComment ?? ""),
     });
   }
   return CAPABILITY_ORDER.map((id) => {
@@ -93,6 +128,8 @@ function migrateCapabilities(raw: unknown): CapabilityRow[] {
         selfRating: null,
         managerRating: null,
         managerComments: "",
+        midYearRating: null,
+        midYearComment: "",
       }
     );
   });
@@ -143,18 +180,27 @@ export function migrateAppraisal(raw: unknown): Appraisal {
             ? "mark"
             : null;
 
+  const directory = findMockUser(ownerUserId);
+  const employeeName = directory
+    ? directory.englishName || directory.employeeName
+    : String(a.employeeName ?? "");
+  const englishName = directory
+    ? directory.englishName
+    : String(a.englishName ?? a.employeeName ?? "");
+  const managerName = directory
+    ? directory.managerName
+    : String(a.managerName ?? "");
+
   return {
     id: String(a.id ?? ""),
     ownerUserId,
     reviewingManagerId,
-    employeeName: String(a.employeeName ?? ""),
-    englishName: String(
-      a.englishName ?? a.employeeName ?? ""
-    ),
+    employeeName,
+    englishName,
     position: String(a.position ?? ""),
     department: String(a.department ?? ""),
     mLevel: clampLevel(Number(a.mLevel) || 3),
-    managerName: String(a.managerName ?? ""),
+    managerName,
     entity,
     status:
       a.status === "submitted" ||
@@ -163,6 +209,8 @@ export function migrateAppraisal(raw: unknown): Appraisal {
       a.status === "draft"
         ? a.status
         : "draft",
+    midYearStatus: migrateMidYearStatus(a.midYearStatus, a.status),
+    midYearManagerComments: String(a.midYearManagerComments ?? ""),
     kpis:
       kpis.length > 0
         ? kpis
@@ -174,6 +222,8 @@ export function migrateAppraisal(raw: unknown): Appraisal {
               selfRating: null,
               managerRating: null,
               managerComments: "",
+              midYearRating: null,
+              midYearComment: "",
             },
           ],
     capabilities: migrateCapabilities(a.capabilities),

@@ -1,8 +1,8 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #000000;
+  --background: #f6f8fc;
+  --foreground: #0b1930;
   color-scheme: light;
 }
 
@@ -11,6 +11,79 @@
   --color-foreground: var(--foreground);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
+}
+
+/* AIFE brand palette — deep institutional navy + warm gold. */
+@theme {
+  --color-navy-950: #071a38;
+  --color-navy-900: #0c2d5e;
+  --color-navy-800: #123a7d;
+  --color-navy-700: #1b4a9c;
+  --color-navy-600: #2560c4;
+  --color-navy-500: #3d78d8;
+  --color-navy-200: #b9cdec;
+  --color-navy-100: #dbe7f7;
+  --color-navy-50: #f0f5fc;
+  --color-gold-700: #8a6a12;
+  --color-gold-600: #a8821b;
+  --color-gold-500: #c9a227;
+  --color-gold-400: #e3be4a;
+  --color-gold-300: #efd27c;
+  --color-gold-100: #f7edcb;
+  --color-gold-50: #fcf8eb;
+}
+
+/* Brand gradients & flourishes */
+.aife-hero-gradient {
+  background:
+    radial-gradient(1200px 500px at 85% -10%, rgb(37 96 196 / 0.55), transparent 60%),
+    radial-gradient(900px 420px at -10% 110%, rgb(201 162 39 / 0.28), transparent 55%),
+    linear-gradient(160deg, #071a38 0%, #0c2d5e 55%, #123a7d 100%);
+}
+
+.aife-header-gradient {
+  background: linear-gradient(90deg, #071a38 0%, #0c2d5e 55%, #123a7d 100%);
+  border-bottom: 1px solid rgb(255 255 255 / 0.08);
+}
+
+.aife-gold-underline {
+  background-image: linear-gradient(90deg, #c9a227, #e3be4a 55%, transparent);
+  background-repeat: no-repeat;
+  background-size: 100% 3px;
+  background-position: 0 100%;
+}
+
+@keyframes aife-float {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-10px); }
+}
+
+@keyframes aife-sheen {
+  0% { transform: translateX(-70%) skewX(-12deg); }
+  100% { transform: translateX(220%) skewX(-12deg); }
+}
+
+.aife-video-sheen::after {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 40%;
+  background: linear-gradient(
+    100deg,
+    transparent 10%,
+    rgb(255 255 255 / 0.14) 50%,
+    transparent 90%
+  );
+  animation: aife-sheen 4.5s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aife-video-sheen::after {
+    animation: none;
+  }
+  .aife-float {
+    animation: none !important;
+  }
 }
 
 body {

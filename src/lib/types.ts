@@ -5,6 +5,42 @@ export type AppraisalStatus =
   /** Manager finalized and sent to HR; record is locked. */
   | "completed";
 
+/**
+ * Reporting status shared by both review cycles (Mid-Year and Annual).
+ * Displayed as: Not Started / Draft / Submitted / Completed.
+ */
+export type CycleStatus = "not_started" | "draft" | "submitted" | "completed";
+
+/** Mid-Year checkpoint rating per KPI (employee self-assessment). */
+export type MidYearRating = "on_track" | "not_on_track" | "early_access";
+
+export const MID_YEAR_RATING_OPTIONS: MidYearRating[] = [
+  "on_track",
+  "not_on_track",
+  /* Not currently applicable but kept available if required. */
+  "early_access",
+];
+
+export const MID_YEAR_RATING_LABELS: Record<MidYearRating, string> = {
+  on_track: "On Track",
+  not_on_track: "Not on Track",
+  early_access: "Too early to access",
+};
+
+export const CYCLE_STATUS_LABELS: Record<CycleStatus, string> = {
+  not_started: "Not Started",
+  draft: "Draft",
+  submitted: "Submitted",
+  completed: "Completed",
+};
+
+/** Annual workflow status → reporting cycle status (HR two-column report). */
+export function annualCycleStatus(status: AppraisalStatus): CycleStatus {
+  if (status === "draft") return "draft";
+  if (status === "submitted" || status === "reviewed") return "submitted";
+  return "completed";
+}
+
 /** Matches form column “Goals | KPIs”. */
 export type KpiRow = {
   goalsAndKpis: string;
@@ -15,6 +51,10 @@ export type KpiRow = {
   selfRating: number | null;
   managerRating: number | null;
   managerComments: string;
+  /** Mid-Year checkpoint — employee self-assessment (On Track / Not on Track). */
+  midYearRating: MidYearRating | null;
+  /** Mid-Year manager comment against this KPI. */
+  midYearComment: string;
 };
 
 export type CapabilityId =
@@ -29,6 +69,13 @@ export type CapabilityRow = {
   selfRating: number | null;
   managerRating: number | null;
   managerComments: string;
+  /**
+   * Mid-Year capability rating — optional (1–5). Not mandatory at mid-year.
+   * Scale: Does not meet / Needs improvement / Meets / Exceeds / Outstanding.
+   */
+  midYearRating: number | null;
+  /** Mid-Year manager comment on this capability (optional). */
+  midYearComment: string;
 };
 
 export type Appraisal = {
@@ -50,6 +97,10 @@ export type Appraisal = {
   managerName: string;
   entity: string;
   status: AppraisalStatus;
+  /** Mid-Year checkpoint status (independent of the annual workflow). */
+  midYearStatus: CycleStatus;
+  /** Overall Mid-Year manager comment (shown in Annual review too). */
+  midYearManagerComments: string;
   kpis: KpiRow[];
   capabilities: CapabilityRow[];
   employeeComments: string;
@@ -62,7 +113,8 @@ export type Appraisal = {
   managerOverallOverride: number | null;
 };
 
-export const MAX_KPIS = 5;
+export const MIN_KPIS = 3;
+export const MAX_KPIS = 6;
 
 export const CAPABILITY_ORDER: CapabilityId[] = [
   "planning",

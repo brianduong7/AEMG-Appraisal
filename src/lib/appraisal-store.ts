@@ -2,15 +2,16 @@ import { promises as fs } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
 import type { Appraisal, CapabilityRow, KpiRow } from "./types";
-import { CAPABILITY_ORDER, ENTITY_OPTIONS, MAX_KPIS } from "./types";
+import { CAPABILITY_ORDER, ENTITY_OPTIONS, MAX_KPIS, MIN_KPIS } from "./types";
 import { migrateAppraisal } from "./migrate-appraisal";
+import { buildDemoHrPersonalAppraisal, buildDemoSubmittedEmmaForMark } from "./demo-appraisal-seed";
+import { buildDemoHrCompletedAppraisals } from "./demo-hr-seed";
 import {
+  DEMO_HR,
   employmentProfileFromUser,
   findMockUser,
   reviewingManagerIdForOwner,
 } from "./mock-users";
-import { buildDemoSubmittedEmmaForMark } from "./demo-appraisal-seed";
-import { buildDemoHrCompletedAppraisals } from "./demo-hr-seed";
 import {
   addReviewPendingNotification,
   removeNotificationsForAppraisal,
@@ -43,6 +44,8 @@ function defaultCapabilities(): CapabilityRow[] {
     selfRating: null,
     managerRating: null,
     managerComments: "",
+    midYearRating: null,
+    midYearComment: "",
   }));
 }
 
@@ -130,19 +133,69 @@ async function ensureDemoSubmittedEmmaForMark(
   return list;
 }
 
+async function ensureDemoHrPersonalAppraisal(
+  list: Appraisal[]
+): Promise<Appraisal[]> {
+  if (process.env.DISABLE_DEMO_APPRAISAL_SEED === "1") {
+    return list;
+  }
+  if (list.some((a) => a.ownerUserId === DEMO_HR.id)) {
+    return list;
+  }
+  const demo = buildDemoHrPersonalAppraisal();
+  list.push(demo);
+  await writeAppraisals(list);
+  return list;
+}
+
 async function ensureDemoCompletedForHr(list: Appraisal[]): Promise<Appraisal[]> {
   if (process.env.DISABLE_DEMO_APPRAISAL_SEED === "1") {
     return list;
   }
   const seeds = buildDemoHrCompletedAppraisals();
-  let added = false;
+  let changed = false;
   for (const demo of seeds) {
-    if (list.some((a) => a.id === demo.id)) continue;
-    if (list.some((a) => a.ownerUserId === demo.ownerUserId)) continue;
-    list.push(demo);
-    added = true;
+    const idx = list.findIndex((a) => a.id === demo.id);
+    if (idx === -1) {
+      if (list.some((a) => a.ownerUserId === demo.ownerUserId)) continue;
+      list.push(demo);
+      changed = true;
+      continue;
+    }
+    /* Refresh mid-year dummy fields on existing HR demo rows so UI logic is easy to check. */
+    const current = list[idx]!;
+    const needsMidYearRefresh =
+      current.midYearStatus !== "completed" ||
+      current.kpis.some(
+        (k, i) =>
+          k.midYearRating == null ||
+          k.midYearRating !== demo.kpis[i]?.midYearRating ||
+          !k.midYearComment?.trim()
+      ) ||
+      current.capabilities.some(
+        (c, i) =>
+          c.midYearComment !== demo.capabilities[i]?.midYearComment
+      );
+    if (!needsMidYearRefresh) continue;
+    list[idx] = {
+      ...current,
+      midYearStatus: demo.midYearStatus,
+      midYearManagerComments: demo.midYearManagerComments,
+      kpis: current.kpis.map((k, i) => ({
+        ...k,
+        midYearRating: demo.kpis[i]?.midYearRating ?? k.midYearRating,
+        midYearComment: demo.kpis[i]?.midYearComment ?? k.midYearComment,
+      })),
+      capabilities: current.capabilities.map((c, i) => ({
+        ...c,
+        midYearRating: null,
+        midYearComment:
+          demo.capabilities[i]?.midYearComment ?? c.midYearComment,
+      })),
+    };
+    changed = true;
   }
-  if (added) {
+  if (changed) {
     await writeAppraisals(list);
   }
   return list;
@@ -151,6 +204,7 @@ async function ensureDemoCompletedForHr(list: Appraisal[]): Promise<Appraisal[]>
 export async function readAppraisals(): Promise<Appraisal[]> {
   let list = await ensureFile();
   list = await ensureDemoSubmittedEmmaForMark(list);
+  list = await ensureDemoHrPersonalAppraisal(list);
   list = await ensureDemoCompletedForHr(list);
   const { next, changed } = await applyAppraisalListPolicy(list);
   if (changed) {
@@ -191,16 +245,14 @@ export async function createAppraisal(ownerUserId: string): Promise<Appraisal> {
     reviewingManagerId,
     ...profile,
     status: "draft" as const,
-    kpis: [
-      {
-        goalsAndKpis: "",
-        weightPercent: 100,
-        dueDate: "",
-        selfRating: null,
-        managerRating: null,
-        managerComments: "",
-      },
-    ],
+    kpis: Array.from({ length: MIN_KPIS }, () => ({
+      goalsAndKpis: "",
+      weightPercent: 0,
+      dueDate: "",
+      selfRating: null,
+      managerRating: null,
+      managerComments: "",
+    })),
     capabilities: defaultCapabilities(),
     employeeComments: "",
     managerComments: "",
@@ -246,6 +298,8 @@ function clampCapabilities(rows: CapabilityRow[]): CapabilityRow[] {
       managerRating:
         r?.managerRating == null ? null : clampOptionalRating(r.managerRating),
       managerComments: String(r?.managerComments ?? ""),
+      midYearRating: clampOptionalRating(r?.midYearRating),
+      midYearComment: String(r?.midYearComment ?? ""),
     };
   });
 }

@@ -15,10 +15,10 @@ export function AppLogo({
 }: AppLogoProps) {
   const sizeClass =
     variant === "login"
-      ? "h-10 w-auto max-w-[165px]"
-      : "h-7 w-auto max-w-[108px]";
-  const width = variant === "login" ? 165 : 108;
-  const height = variant === "login" ? 40 : 28;
+      ? "h-11 w-auto max-w-[180px]"
+      : "h-9 w-auto max-w-[140px]";
+  const width = variant === "login" ? 180 : 140;
+  const height = variant === "login" ? 44 : 36;
 
   const img = (
     <Image
@@ -26,7 +26,7 @@ export function AppLogo({
       alt="Australia Institute of Future Education"
       width={width}
       height={height}
-      className={`rounded-md object-contain object-left ${sizeClass} ${className}`}
+      className={`object-contain object-left ${sizeClass} ${className}`}
       priority={variant === "login"}
     />
   );

@@ -14,8 +14,9 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AEMG Appraisal",
-  description: "Employee appraisal demo — draft, submit, manager review",
+  title: "AIFE Performance | Appraisal",
+  description:
+    "AIFE performance portal — mid-year checkpoints, annual appraisals, manager review",
   icons: { icon: "/logos/aife.png" },
 };
 
@@ -26,7 +27,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en" className={`${geistSans.variable} ${geistMono.variable} h-full antialiased`}>
-      <body className="flex min-h-full flex-col bg-white text-black">
+      <body className="flex min-h-full flex-col bg-[#f6f8fc] text-[#0b1930]">
         <Providers>{children}</Providers>
       </body>
     </html>

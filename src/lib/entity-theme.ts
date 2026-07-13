@@ -13,11 +13,11 @@ export function appraisalListDisplayName(
   user: MockUser | null
 ): string {
   if (mode === "employee" && user && a.ownerUserId === user.id) {
-    return user.employeeName;
+    return user.englishName || user.employeeName;
   }
   const fromDirectory = findMockUser(a.ownerUserId);
-  if (fromDirectory) return fromDirectory.employeeName;
-  return a.employeeName || "Appraisal";
+  if (fromDirectory) return fromDirectory.englishName || fromDirectory.employeeName;
+  return a.englishName?.trim() || a.employeeName || "Appraisal";
 }
 
 /**
