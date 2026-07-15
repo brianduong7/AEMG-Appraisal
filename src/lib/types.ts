@@ -6,10 +6,16 @@ export type AppraisalStatus =
   | "completed";
 
 /**
- * Reporting status shared by both review cycles (Mid-Year and Annual).
- * Displayed as: Not Started / Draft / Submitted / Completed.
+ * Mid-Year column status (also covers early-year KPI gate).
+ * KPI Created → KPI Approved, then mid-year draft/submitted/completed.
  */
-export type CycleStatus = "not_started" | "draft" | "submitted" | "completed";
+export type CycleStatus =
+  | "not_started"
+  | "kpi_created"
+  | "kpi_approved"
+  | "draft"
+  | "submitted"
+  | "completed";
 
 /** Mid-Year checkpoint rating per KPI (employee self-assessment). */
 export type MidYearRating = "on_track" | "not_on_track" | "early_access";
@@ -29,17 +35,49 @@ export const MID_YEAR_RATING_LABELS: Record<MidYearRating, string> = {
 
 export const CYCLE_STATUS_LABELS: Record<CycleStatus, string> = {
   not_started: "Not Started",
+  kpi_created: "KPI Created",
+  kpi_approved: "KPI Approved",
   draft: "Draft",
   submitted: "Submitted",
   completed: "Completed",
 };
 
 /** Annual workflow status → reporting cycle status (HR two-column report). */
-export function annualCycleStatus(status: AppraisalStatus): CycleStatus {
+export function annualCycleStatus(
+  status: AppraisalStatus,
+  midYearStatus?: CycleStatus
+): CycleStatus {
   if (status === "draft") return "draft";
+  if (status === "completed") return "completed";
+  /* Annual stays Draft until mid-year is completed. */
+  if (
+    midYearStatus === "not_started" ||
+    midYearStatus === "kpi_created" ||
+    midYearStatus === "kpi_approved" ||
+    midYearStatus === "draft" ||
+    midYearStatus === "submitted"
+  ) {
+    return "draft";
+  }
   if (status === "submitted" || status === "reviewed") return "submitted";
   return "completed";
 }
+
+/** HR-controlled windows: when false, that phase is locked for employees/managers. */
+export type ReviewWindowSettings = {
+  /** Employee can submit KPIs (beginning of year). */
+  kpiSubmissionOpen: boolean;
+  /** Mid-year ratings + manager comments. */
+  midYearReviewOpen: boolean;
+  /** Annual self-ratings + manager annual ratings. */
+  annualReviewOpen: boolean;
+};
+
+export const DEFAULT_REVIEW_WINDOWS: ReviewWindowSettings = {
+  kpiSubmissionOpen: true,
+  midYearReviewOpen: false,
+  annualReviewOpen: false,
+};
 
 /** Matches form column “Goals | KPIs”. */
 export type KpiRow = {

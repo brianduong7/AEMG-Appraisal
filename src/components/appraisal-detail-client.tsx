@@ -7,8 +7,10 @@ import type {
   Appraisal,
   KpiRow,
   MidYearRating,
+  ReviewWindowSettings,
 } from "@/lib/types";
 import {
+  DEFAULT_REVIEW_WINDOWS,
   MAX_KPIS,
   MIN_KPIS,
   MID_YEAR_RATING_LABELS,
@@ -264,6 +266,23 @@ function AppraisalDetailInner({
     useState(false);
 
   useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/settings");
+        if (!res.ok) return;
+        const body = (await res.json()) as ReviewWindowSettings;
+        if (!cancelled) setReviewWindows(body);
+      } catch {
+        /* keep defaults */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     setCompleteAppraisalDemoBanner(false);
   }, [id]);
 
@@ -309,6 +328,9 @@ function AppraisalDetailInner({
   const [midYearBanner, setMidYearBanner] = useState<
     null | "saved" | "submitted"
   >(null);
+  const [reviewWindows, setReviewWindows] = useState<ReviewWindowSettings>(
+    DEFAULT_REVIEW_WINDOWS
+  );
   const [skipLevelNotice, setSkipLevelNotice] = useState(false);
   const [activeTab, setActiveTab] = useState<AppraisalTabId>("overview");
   const [ratingLegendOpen, setRatingLegendOpen] = useState(false);
@@ -377,12 +399,15 @@ function AppraisalDetailInner({
   const employeeMidYearEditable =
     role === "employee" &&
     appraisal.status === "submitted" &&
-    appraisal.midYearStatus !== "completed" &&
+    (appraisal.midYearStatus === "kpi_approved" ||
+      appraisal.midYearStatus === "draft") &&
+    reviewWindows.midYearReviewOpen &&
     draft != null;
   const employeeAnnualEditable =
     role === "employee" &&
     appraisal.status === "submitted" &&
     appraisal.midYearStatus === "completed" &&
+    reviewWindows.annualReviewOpen &&
     draft != null;
   const employeeCanEditComments =
     employeeKpiEditable || employeeMidYearEditable || employeeAnnualEditable;
@@ -392,7 +417,13 @@ function AppraisalDetailInner({
       : appraisal;
   const showEmployeeSelfRating =
     appraisal.status !== "draft" && appraisal.midYearStatus === "completed";
-  const showReviewCycles = appraisal.status !== "draft";
+  const showReviewCycles =
+    appraisal.status !== "draft" &&
+    (appraisal.midYearStatus === "draft" ||
+      appraisal.midYearStatus === "submitted" ||
+      appraisal.midYearStatus === "completed" ||
+      (appraisal.midYearStatus === "kpi_approved" &&
+        reviewWindows.midYearReviewOpen));
   const showAnnualReview = appraisal.midYearStatus === "completed";
   const showKpiRatingsSummary = showEmployeeSelfRating;
   const weightTotal = useMemo(() => sumKpiWeights(src.kpis), [src.kpis]);
@@ -472,6 +503,33 @@ function AppraisalDetailInner({
       if (action === "employee_submit") {
         setEmployeeBanner(true);
       }
+    } catch {
+      setFormError("Network error.");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function approveKpis() {
+    setBusy(true);
+    setFormError(null);
+    try {
+      const res = await fetch(`/api/appraisals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "manager_kpi_approve" }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setFormError(
+          typeof body?.error === "string" ? body.error : "Request failed."
+        );
+        return;
+      }
+      const next = body as Appraisal;
+      setAppraisal(next);
+      saveAppraisalBootstrap(next);
+      setManagerBanner("saved");
     } catch {
       setFormError("Network error.");
     } finally {
@@ -697,11 +755,17 @@ function AppraisalDetailInner({
   const isEmployee = role === "employee";
   const isManager = role === "manager";
   const isHr = role === "hr";
-  /** Mid-year: manager comments per KPI after employee mid-year ratings. */
+  /** Manager approves beginning-of-year KPIs before mid-year opens. */
+  const managerCanKpiApprove =
+    isManager &&
+    appraisal.status === "submitted" &&
+    appraisal.midYearStatus === "kpi_created";
+  /** Mid-year: manager comments after employee mid-year submit. */
   const managerCanMidYear =
     isManager &&
     (appraisal.status === "submitted" || appraisal.status === "reviewed") &&
-    appraisal.midYearStatus !== "completed" &&
+    appraisal.midYearStatus === "submitted" &&
+    reviewWindows.midYearReviewOpen &&
     midYearDraft != null;
   const employeeReadOnlyEmployee =
     isEmployee &&
@@ -714,6 +778,7 @@ function AppraisalDetailInner({
     isManager &&
     (appraisal.status === "submitted" || appraisal.status === "reviewed") &&
     appraisal.midYearStatus === "completed" &&
+    reviewWindows.annualReviewOpen &&
     employeeAnnualRatingsComplete &&
     managerKpiDraft != null &&
     managerCapDraft != null;
@@ -959,7 +1024,22 @@ function AppraisalDetailInner({
           )}
           {mode === "employee" &&
             appraisal.status === "submitted" &&
-            appraisal.midYearStatus !== "completed" && (
+            appraisal.midYearStatus === "kpi_created" && (
+              <p className="mt-2 text-sm text-zinc-600">
+                <strong>KPIs submitted</strong> — Mid-Year Status is{" "}
+                <em>KPI Created</em>. Waiting for your manager to approve.
+              </p>
+            )}
+          {mode === "employee" &&
+            appraisal.status === "submitted" &&
+            appraisal.midYearStatus === "kpi_approved" &&
+            !reviewWindows.midYearReviewOpen && (
+              <p className="mt-2 text-sm text-zinc-600">
+                <strong>KPIs approved</strong> — Mid-year review will open when
+                HR unlocks the Mid-Year window.
+              </p>
+            )}
+          {mode === "employee" && employeeMidYearEditable && (
               <p className="mt-2 text-sm text-zinc-600">
                 <strong>Mid-year review</strong> — record your On Track /
                 Not on Track rating for each KPI. Your manager will add
@@ -972,6 +1052,12 @@ function AppraisalDetailInner({
               capability, then submit for your manager&apos;s review.
             </p>
           )}
+          {mode === "manager" && managerCanKpiApprove && (
+            <p className="mt-2 text-sm text-zinc-600">
+              <strong>KPI approval</strong> — review the employee&apos;s KPIs
+              and approve to set Mid-Year Status to <em>KPI Approved</em>.
+            </p>
+          )}
           {mode === "manager" && appraisal.status === "completed" && (
             <p className="mt-2 text-sm text-zinc-600">
               <strong>View only</strong> — this appraisal was sent to HR and
@@ -980,8 +1066,8 @@ function AppraisalDetailInner({
           )}
           {mode === "hr" && (
             <p className="mt-2 text-sm text-zinc-600">
-              <strong>Super Admin / HR view</strong> — free open access in this
-              demo (cycle lock windows deferred).
+              <strong>Super Admin / HR view</strong> — review windows are
+              controlled from Admin Settings in the sidebar.
             </p>
           )}
         </div>
@@ -998,11 +1084,17 @@ function AppraisalDetailInner({
               </button>
               <button
                 type="button"
-                disabled={busy || !employeeSubmitReady}
+                disabled={
+                  busy ||
+                  !employeeSubmitReady ||
+                  !reviewWindows.kpiSubmissionOpen
+                }
                 title={
-                  !employeeSubmitReady
-                    ? `Need ${MIN_KPIS}–${MAX_KPIS} KPIs with weights totalling 100%`
-                    : undefined
+                  !reviewWindows.kpiSubmissionOpen
+                    ? "KPI submission is locked by HR"
+                    : !employeeSubmitReady
+                      ? `Need ${MIN_KPIS}–${MAX_KPIS} KPIs with weights totalling 100%`
+                      : undefined
                 }
                 className="rounded-lg bg-gradient-to-r from-navy-900 to-navy-700 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:from-navy-800 hover:to-navy-600 disabled:opacity-50"
                 onClick={() => saveEmployee("employee_submit")}
@@ -1010,6 +1102,16 @@ function AppraisalDetailInner({
                 Submit KPIs
               </button>
             </>
+          )}
+          {managerCanKpiApprove && (
+            <button
+              type="button"
+              disabled={busy}
+              className="rounded-lg bg-gradient-to-r from-navy-900 to-navy-700 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:from-navy-800 hover:to-navy-600 disabled:opacity-50"
+              onClick={() => void approveKpis()}
+            >
+              Approve KPIs
+            </button>
           )}
           {employeeMidYearEditable && (
             <>
@@ -1259,7 +1361,7 @@ function AppraisalDetailInner({
                                 <div className={REVIEW_CYCLE_GRID}>
                                   <div>
                                     <p className={REVIEW_CYCLE_SUBLABEL}>
-                                      Employee
+                                      Employee Rating
                                     </p>
                                     <div className={REVIEW_CYCLE_VALUE}>
                                       {employeeAnnualEditable ? (
@@ -1288,7 +1390,7 @@ function AppraisalDetailInner({
                                   </div>
                                   <div>
                                     <p className={REVIEW_CYCLE_SUBLABEL}>
-                                      Manager
+                                      Manager Rating
                                     </p>
                                     <div className={REVIEW_CYCLE_VALUE}>
                                       {managerCanReview && managerCapDraft ? (
@@ -1327,21 +1429,37 @@ function AppraisalDetailInner({
                 </table>
               </div>
               {showEmployeeSelfRating && (
-              <div className="mt-4 rounded-md border border-zinc-200 bg-zinc-50 px-3 py-2 text-sm">
-                <p>
-                  <span className="font-medium">Capability average</span> — Self:{" "}
-                  {capSelfAvg != null
-                    ? `${capSelfAvg.toFixed(2)} (${ratingLabel(Math.min(5, Math.max(1, Math.round(capSelfAvg))))})`
-                    : "—"}
-                </p>
-                {isManager && (
-                  <p className="mt-1">
-                    Manager:{" "}
-                    {capMgrAvg != null
-                      ? `${capMgrAvg.toFixed(2)} (${ratingLabel(Math.min(5, Math.max(1, Math.round(capMgrAvg))))})`
-                      : "—"}
-                  </p>
-                )}
+              <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
+                <h3 className="text-sm font-semibold text-navy-950">
+                  Capability ratings summary
+                </h3>
+                <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+                  <div className="rounded-lg border border-slate-200 bg-white px-3.5 py-3">
+                    <dt className="text-xs font-medium text-slate-500">
+                      Employee Self Rating
+                    </dt>
+                    <dd className="mt-1 text-sm font-semibold text-navy-950">
+                      {capSelfAvg != null
+                        ? ratingLabel(
+                            Math.min(5, Math.max(1, Math.round(capSelfAvg)))
+                          )
+                        : "—"}
+                    </dd>
+                  </div>
+                  <div className="rounded-lg border border-slate-200 bg-white px-3.5 py-3">
+                    <dt className="text-xs font-medium text-slate-500">
+                      Manager Rating
+                    </dt>
+                    <dd className="mt-1 text-sm font-semibold text-navy-950">
+                      {(isManager || appraisal.status !== "draft") &&
+                      capMgrAvg != null
+                        ? ratingLabel(
+                            Math.min(5, Math.max(1, Math.round(capMgrAvg)))
+                          )
+                        : "—"}
+                    </dd>
+                  </div>
+                </dl>
               </div>
               )}
               </>
@@ -1535,7 +1653,7 @@ function AppraisalDetailInner({
                                 <div className={REVIEW_CYCLE_GRID}>
                                   <div>
                                     <p className={REVIEW_CYCLE_SUBLABEL}>
-                                      Employee
+                                      Employee Rating
                                     </p>
                                     <div className={REVIEW_CYCLE_VALUE}>
                                       {employeeMidYearEditable ? (
@@ -1616,7 +1734,7 @@ function AppraisalDetailInner({
                                 <div className={REVIEW_CYCLE_GRID}>
                                   <div>
                                     <p className={REVIEW_CYCLE_SUBLABEL}>
-                                      Employee
+                                      Employee Rating
                                     </p>
                                     <div className={REVIEW_CYCLE_VALUE}>
                                       {employeeAnnualEditable ? (
@@ -1642,7 +1760,7 @@ function AppraisalDetailInner({
                                   </div>
                                   <div>
                                     <p className={REVIEW_CYCLE_SUBLABEL}>
-                                      Manager
+                                      Manager Rating
                                     </p>
                                     <div className={REVIEW_CYCLE_VALUE}>
                                       {managerCanReview && managerKpiDraft ? (

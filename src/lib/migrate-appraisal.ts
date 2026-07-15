@@ -16,14 +16,36 @@ function migrateMidYearRating(raw: unknown): MidYearRating | null {
   return null;
 }
 
-function migrateMidYearStatus(raw: unknown, annualStatus: unknown): CycleStatus {
+function migrateMidYearStatus(
+  raw: unknown,
+  annualStatus: unknown,
+  kpis: unknown
+): CycleStatus {
   /* A completed annual implies the mid-year checkpoint already passed —
      legacy rows predate the mid-year cycle and must not report Not Started. */
   if (annualStatus === "completed" && (raw == null || raw === "not_started")) {
     return "completed";
   }
+  /* Legacy: KPIs submitted but mid-year never started → KPI Created. */
+  if (
+    annualStatus === "submitted" &&
+    (raw == null || raw === "not_started")
+  ) {
+    return "kpi_created";
+  }
+  /* Legacy "draft" with no mid-year ratings yet was the old post-KPI state. */
+  if (annualStatus === "submitted" && raw === "draft") {
+    const list = Array.isArray(kpis) ? kpis : [];
+    const hasMidYear = list.some((row) => {
+      const r = (row as Record<string, unknown>)?.midYearRating;
+      return r != null && r !== "";
+    });
+    if (!hasMidYear) return "kpi_created";
+  }
   if (
     raw === "not_started" ||
+    raw === "kpi_created" ||
+    raw === "kpi_approved" ||
     raw === "draft" ||
     raw === "submitted" ||
     raw === "completed"
@@ -209,7 +231,7 @@ export function migrateAppraisal(raw: unknown): Appraisal {
       a.status === "draft"
         ? a.status
         : "draft",
-    midYearStatus: migrateMidYearStatus(a.midYearStatus, a.status),
+    midYearStatus: migrateMidYearStatus(a.midYearStatus, a.status, a.kpis),
     midYearManagerComments: String(a.midYearManagerComments ?? ""),
     kpis:
       kpis.length > 0

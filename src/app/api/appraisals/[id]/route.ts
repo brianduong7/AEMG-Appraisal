@@ -5,6 +5,7 @@ import {
   addReviewPendingNotification,
   removeNotificationsForAppraisal,
 } from "@/lib/notification-store";
+import { getReviewWindows } from "@/lib/settings-store";
 import type {
   Appraisal,
   CapabilityId,
@@ -235,6 +236,16 @@ export async function PATCH(
     );
 
     if (action === "employee_submit") {
+      const windows = await getReviewWindows();
+      if (!windows.kpiSubmissionOpen) {
+        return NextResponse.json(
+          {
+            error:
+              "KPI submission is locked by HR. Try again when the window is open.",
+          },
+          { status: 403 }
+        );
+      }
       const err = employeeKpiSubmitValidationError(kpisForValidation);
       if (err) {
         return NextResponse.json({ error: err }, { status: 400 });
@@ -276,9 +287,7 @@ export async function PATCH(
         managerOverallOverride: current.managerOverallOverride,
         status: action === "employee_submit" ? "submitted" : "draft",
         midYearStatus:
-          action === "employee_submit" && current.midYearStatus === "not_started"
-            ? "draft"
-            : current.midYearStatus,
+          action === "employee_submit" ? "kpi_created" : current.midYearStatus,
       };
     });
 
@@ -307,10 +316,47 @@ export async function PATCH(
     return NextResponse.json(next);
   }
 
+  if (action === "manager_kpi_approve") {
+    const next = await updateAppraisal(id, (current) => {
+      if (current.status !== "submitted") {
+        return null;
+      }
+      if (current.midYearStatus !== "kpi_created") {
+        return null;
+      }
+      return {
+        ...current,
+        midYearStatus: "kpi_approved" as const,
+      };
+    });
+
+    if (!next) {
+      return NextResponse.json(
+        {
+          error:
+            "Cannot approve KPIs: employee must submit KPIs first (status KPI Created).",
+        },
+        { status: 409 }
+      );
+    }
+    await removeNotificationsForAppraisal(id);
+    return NextResponse.json(next);
+  }
+
   if (
     action === "employee_midyear_save" ||
     action === "employee_midyear_submit"
   ) {
+    const windows = await getReviewWindows();
+    if (!windows.midYearReviewOpen) {
+      return NextResponse.json(
+        {
+          error:
+            "Mid-year review is locked by HR. Try again when the window is open.",
+        },
+        { status: 403 }
+      );
+    }
     const kpisPayload = (body as { kpis?: unknown }).kpis;
     if (!Array.isArray(kpisPayload)) {
       return NextResponse.json(
@@ -334,7 +380,10 @@ export async function PATCH(
       if (current.status !== "submitted") {
         return null;
       }
-      if (current.midYearStatus === "completed") {
+      if (
+        current.midYearStatus !== "kpi_approved" &&
+        current.midYearStatus !== "draft"
+      ) {
         return null;
       }
       if (lines.length !== current.kpis.length) {
@@ -364,6 +413,16 @@ export async function PATCH(
   }
 
   if (action === "employee_annual_save" || action === "employee_annual_submit") {
+    const windows = await getReviewWindows();
+    if (!windows.annualReviewOpen) {
+      return NextResponse.json(
+        {
+          error:
+            "Annual review is locked by HR. Try again when the window is open.",
+        },
+        { status: 403 }
+      );
+    }
     if (!isEmployeePayload(data)) {
       return NextResponse.json({ error: "Invalid employee data" }, { status: 400 });
     }
@@ -430,6 +489,16 @@ export async function PATCH(
   }
 
   if (action === "manager_submit") {
+    const windows = await getReviewWindows();
+    if (!windows.annualReviewOpen) {
+      return NextResponse.json(
+        {
+          error:
+            "Annual review is locked by HR. Try again when the window is open.",
+        },
+        { status: 403 }
+      );
+    }
     const kpisPayload = (body as { kpis?: unknown }).kpis;
     const capsPayload = (body as { capabilities?: unknown }).capabilities;
     if (!Array.isArray(kpisPayload) || !Array.isArray(capsPayload)) {
@@ -550,6 +619,16 @@ export async function PATCH(
   }
 
   if (action === "manager_midyear_save" || action === "manager_midyear_submit") {
+    const windows = await getReviewWindows();
+    if (!windows.midYearReviewOpen) {
+      return NextResponse.json(
+        {
+          error:
+            "Mid-year review is locked by HR. Try again when the window is open.",
+        },
+        { status: 403 }
+      );
+    }
     const kpisPayload = (body as { kpis?: unknown }).kpis;
     const capsPayload = (body as { capabilities?: unknown }).capabilities;
     if (!Array.isArray(kpisPayload)) {
@@ -592,11 +671,11 @@ export async function PATCH(
     }
 
     const next = await updateAppraisal(id, (current) => {
-      /* Mid-year runs after the employee locks KPIs, before annual review. */
+      /* Mid-year manager comments after employee mid-year submit. */
       if (current.status !== "submitted" && current.status !== "reviewed") {
         return null;
       }
-      if (current.midYearStatus === "completed") {
+      if (current.midYearStatus !== "submitted") {
         return null;
       }
       if (lines.length !== current.kpis.length) {
@@ -631,7 +710,7 @@ export async function PATCH(
       return NextResponse.json(
         {
           error:
-            "Cannot save mid-year review: the employee must submit KPIs first, and the appraisal must not be completed.",
+            "Cannot save mid-year review: the employee must submit mid-year ratings first.",
         },
         { status: 409 }
       );

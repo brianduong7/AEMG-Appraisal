@@ -11,9 +11,9 @@ export const DEMO_EMMA_SUBMITTED_FOR_MARK_ID =
  * open it from the list or notifications and complete manager review.
  */
 export function buildDemoSubmittedEmmaForMark(): Appraisal {
-  const capabilities = CAPABILITY_ORDER.map((id, i) => ({
+  const capabilities = CAPABILITY_ORDER.map((id) => ({
     id,
-    selfRating: (3 + (i % 3)) as number,
+    selfRating: null as number | null,
     managerRating: null as number | null,
     managerComments: "",
     midYearRating: null as number | null,
@@ -31,38 +31,45 @@ export function buildDemoSubmittedEmmaForMark(): Appraisal {
     managerName: "Mark Stevenson",
     entity: "HQ Corporate Services",
     status: "submitted",
+    midYearStatus: "kpi_created",
     kpis: [
       {
         goalsAndKpis:
           "Deliver Q3 close analytics pack and reconcile variance drivers with FP&A.",
         weightPercent: 40,
         dueDate: "2026-03-31",
-        selfRating: 4,
+        selfRating: null,
         managerRating: null,
         managerComments: "",
+        midYearRating: null,
+        midYearComment: "",
       },
       {
         goalsAndKpis:
           "Stand up monthly KPI dashboard for the finance leadership forum.",
         weightPercent: 35,
         dueDate: "2026-06-30",
-        selfRating: 4,
+        selfRating: null,
         managerRating: null,
         managerComments: "",
+        midYearRating: null,
+        midYearComment: "",
       },
       {
         goalsAndKpis:
           "Mentor junior analyst on modeling standards and review cycles.",
         weightPercent: 25,
         dueDate: "2026-12-31",
-        selfRating: 3,
+        selfRating: null,
         managerRating: null,
         managerComments: "",
+        midYearRating: null,
+        midYearComment: "",
       },
     ],
     capabilities,
     employeeComments:
-      "Demo submission (pre-loaded): please add your manager ratings and comments below.",
+      "Demo submission (pre-loaded): KPIs submitted — Mid-Year Status is KPI Created. Manager can Approve KPIs.",
     managerComments: "",
     managerOverallOverride: null,
   });

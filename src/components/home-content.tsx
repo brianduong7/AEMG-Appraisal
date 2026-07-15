@@ -11,6 +11,7 @@ import { useRole } from "@/contexts/role-context";
 import { useSession } from "@/contexts/session-context";
 import { saveAppraisalBootstrap } from "@/lib/appraisal-bootstrap";
 import { AppShell } from "@/components/app-shell";
+import { AdminSettingsPanel } from "@/components/admin-settings-content";
 import { SearchableCombobox } from "@/components/searchable-combobox";
 import {
   filterAppraisalsForView,
@@ -23,6 +24,8 @@ import {
 function cycleStatusBadge(status: CycleStatus) {
   const map: Record<CycleStatus, string> = {
     not_started: "border border-slate-200 bg-slate-50 text-slate-500",
+    kpi_created: "border border-sky-200 bg-sky-50 text-sky-800",
+    kpi_approved: "border border-indigo-200 bg-indigo-50 text-indigo-800",
     draft: "border border-gold-300 bg-gold-50 text-gold-700",
     submitted: "border border-navy-200 bg-navy-50 text-navy-800",
     completed: "border border-emerald-200 bg-emerald-50 text-emerald-800",
@@ -43,7 +46,11 @@ function CycleStatusPill({ status }: { status: CycleStatus }) {
               ? "bg-navy-600"
               : status === "draft"
                 ? "bg-gold-500"
-                : "bg-slate-300"
+                : status === "kpi_created"
+                  ? "bg-sky-500"
+                  : status === "kpi_approved"
+                    ? "bg-indigo-500"
+                    : "bg-slate-300"
         }`}
         aria-hidden
       />
@@ -267,11 +274,23 @@ export function HomeContent() {
               "Review direct reports — mid-year checkpoints and annual appraisals."}
             {appraisalView === "admin" &&
               "Super Admin view — all appraisals, free open access for demo review."}
+            {appraisalView === "settings" &&
+              "Configure review windows and other appraisal module settings."}
           </p>
         </div>
       </div>
 
       <div className="mx-auto w-full max-w-[1500px] flex-1 px-4 py-8 sm:px-6">
+        {appraisalView === "settings" ? (
+          caps.canAdminSettings ? (
+            <AdminSettingsPanel />
+          ) : (
+            <p className="text-sm text-slate-600">
+              Admin Settings are only available to HR / Super Admin.
+            </p>
+          )
+        ) : (
+          <>
         {notice === "submitted" && (
           <div
             className="mb-5 rounded-xl border border-navy-200 bg-navy-50 px-4 py-3 text-sm text-navy-900"
@@ -512,7 +531,9 @@ export function HomeContent() {
                         <CycleStatusPill status={a.midYearStatus} />
                       </td>
                       <td className="px-4 py-3.5">
-                        <CycleStatusPill status={annualCycleStatus(a.status)} />
+                        <CycleStatusPill
+                          status={annualCycleStatus(a.status, a.midYearStatus)}
+                        />
                       </td>
                       <td className="px-4 py-3.5 text-slate-600">
                         {erpAppraisalCycleLabel(cycleYear)}
@@ -545,6 +566,8 @@ export function HomeContent() {
             </div>
           )}
         </section>
+          </>
+        )}
       </div>
     </AppShell>
   );

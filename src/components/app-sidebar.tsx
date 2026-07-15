@@ -13,6 +13,30 @@ import {
 
 const SIDEBAR_KEY = "aife-sidebar-open";
 
+function IconCog({ className }: { className?: string }) {
+  return (
+    <svg
+      className={className}
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.75}
+      aria-hidden
+    >
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M9.594 3.94c.09-.542.56-.94 1.11-.94h2.593c.55 0 1.02.398 1.11.94l.213 1.281c.063.374.313.686.645.87.074.04.147.083.22.127.324.196.72.257 1.075.124l1.217-.456a1.125 1.125 0 011.37.49l1.296 2.247a1.125 1.125 0 01-.26 1.431l-1.003.827c-.293.24-.438.613-.438.995s.145.755.438.995l1.003.827c.424.35.534.954.26 1.431l-1.296 2.247a1.125 1.125 0 01-1.37.49l-1.217-.456c-.355-.133-.75-.072-1.076.124a6.47 6.47 0 01-.22.128c-.331.183-.581.495-.644.869l-.213 1.28c-.09.543-.56.941-1.11.941h-2.594c-.55 0-1.02-.398-1.11-.94l-.213-1.281c-.062-.374-.312-.686-.644-.87a6.52 6.52 0 01-.22-.127c-.325-.196-.72-.257-1.076-.124l-1.217.456a1.125 1.125 0 01-1.37-.49l-1.296-2.247a1.125 1.125 0 01.26-1.431l1.004-.827c.292-.24.437-.613.437-.995s-.145-.755-.437-.995l-1.004-.827a1.125 1.125 0 01-.26-1.431l1.296-2.247a1.125 1.125 0 011.37-.49l1.217.456c.355.133.75.072 1.076-.124.072-.044.146-.087.22-.128.332-.183.582-.495.644-.869l.214-1.281z"
+      />
+      <path
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+      />
+    </svg>
+  );
+}
+
 function IconUser({ className }: { className?: string }) {
   return (
     <svg
@@ -74,7 +98,7 @@ type NavItem = {
   view: AppraisalNavView;
   label: string;
   href: string;
-  icon: "user" | "team" | "shield";
+  icon: "user" | "team" | "shield" | "cog";
 };
 
 /**
@@ -153,6 +177,20 @@ export function AppSidebar() {
   }, [caps]);
 
   if (!mode || !ready) return null;
+
+  function navLinkClass(active: boolean) {
+    return `group flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition ${
+      active
+        ? "bg-white/12 text-white shadow-sm ring-1 ring-gold-400/40"
+        : "text-white/65 hover:bg-white/6 hover:text-white"
+    }`;
+  }
+
+  function iconClass(active: boolean) {
+    return `h-5 w-5 shrink-0 ${
+      active ? "text-gold-400" : "text-white/50 group-hover:text-gold-300"
+    }`;
+  }
 
   return (
     <>
@@ -264,24 +302,29 @@ export function AppSidebar() {
                 title={item.label}
                 aria-current={active ? "page" : undefined}
                 onClick={() => setOpenPersist(false)}
-                className={`group flex items-center gap-3 rounded-lg px-2.5 py-2.5 text-sm font-medium transition ${
-                  active
-                    ? "bg-white/12 text-white shadow-sm ring-1 ring-gold-400/40"
-                    : "text-white/65 hover:bg-white/6 hover:text-white"
-                }`}
+                className={navLinkClass(active)}
               >
-                <Icon
-                  className={`h-5 w-5 shrink-0 ${
-                    active
-                      ? "text-gold-400"
-                      : "text-white/50 group-hover:text-gold-300"
-                  }`}
-                />
+                <Icon className={iconClass(active)} />
                 <span className="truncate">{item.label}</span>
               </Link>
             );
           })}
         </nav>
+
+        {caps.canAdminSettings && (
+          <div className="border-t border-white/10 p-2">
+            <Link
+              href="/?view=settings"
+              title="Admin Settings"
+              aria-current={activeView === "settings" ? "page" : undefined}
+              onClick={() => setOpenPersist(false)}
+              className={navLinkClass(activeView === "settings")}
+            >
+              <IconCog className={iconClass(activeView === "settings")} />
+              <span className="truncate">Admin Settings</span>
+            </Link>
+          </div>
+        )}
 
         <p className="border-t border-white/10 px-3 py-3 text-[10px] leading-relaxed text-white/35">
           Role-based menu. My Team shows direct reports only.

@@ -9,7 +9,7 @@ import {
 export type SessionModeLike = "employee" | "manager" | "hr";
 
 /** App list scopes under Appraisal (sidebar). */
-export type AppraisalNavView = "my" | "team" | "admin";
+export type AppraisalNavView = "my" | "team" | "admin" | "settings";
 
 export type NavCapability = {
   /** Lowest-level employee or anyone with a personal appraisal. */
@@ -18,6 +18,8 @@ export type NavCapability = {
   canMyTeam: boolean;
   /** HR / Super Admin org-wide list. */
   canSuperAdmin: boolean;
+  /** HR Admin Settings page (review windows, etc.). */
+  canAdminSettings: boolean;
   /** Display role chip. */
   roleLabel: string;
 };
@@ -49,6 +51,7 @@ export function navCapabilitiesForSession(
       canMyAppraisal: true,
       canMyTeam: true,
       canSuperAdmin: true,
+      canAdminSettings: true,
       roleLabel: "Super Admin · HR",
     };
   }
@@ -58,6 +61,7 @@ export function navCapabilitiesForSession(
       canMyAppraisal: true,
       canMyTeam: reports,
       canSuperAdmin: false,
+      canAdminSettings: false,
       roleLabel: reports ? "Manager" : "Employee",
     };
   }
@@ -68,6 +72,7 @@ export function navCapabilitiesForSession(
       canMyAppraisal: true,
       canMyTeam: reports,
       canSuperAdmin: false,
+      canAdminSettings: false,
       roleLabel: reports ? "Manager" : "Employee",
     };
   }
@@ -75,6 +80,7 @@ export function navCapabilitiesForSession(
     canMyAppraisal: false,
     canMyTeam: false,
     canSuperAdmin: false,
+    canAdminSettings: false,
     roleLabel: "Guest",
   };
 }
@@ -92,6 +98,7 @@ export function parseAppraisalView(
   if (raw === "my" && caps.canMyAppraisal) return "my";
   if (raw === "team" && caps.canMyTeam) return "team";
   if (raw === "admin" && caps.canSuperAdmin) return "admin";
+  if (raw === "settings" && caps.canAdminSettings) return "settings";
   return defaultAppraisalView(caps);
 }
 
@@ -103,6 +110,9 @@ export function filterAppraisalsForView(
   user: MockUser | null,
   managerId: string | null
 ): Appraisal[] {
+  if (view === "settings") {
+    return [];
+  }
   if (view === "admin") {
     /* Super Admin: free open access — all records. */
     return list;
@@ -137,6 +147,7 @@ export function filterAppraisalsForView(
 export function viewTitle(view: AppraisalNavView): string {
   if (view === "my") return "My Appraisals";
   if (view === "team") return "My Team Appraisals";
+  if (view === "settings") return "Admin Settings";
   return "Super Admin";
 }
 
@@ -146,6 +157,9 @@ export function viewSubtitle(view: AppraisalNavView): string {
   }
   if (view === "team") {
     return "Direct reports only — mid-year checkpoints and annual reviews.";
+  }
+  if (view === "settings") {
+    return "Cycle windows and org settings for the appraisal module.";
   }
   return "Org-wide appraisal list (demo Super Admin / Super User). Free open access.";
 }
