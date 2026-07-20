@@ -1,4 +1,4 @@
-# AEMG EPM — Employee Performance Management
+# AEMG EPM — Employee Performance Management System
 
 Appraisal portal for **AIFE / AEMG Education Group**. Employees set KPIs, complete mid-year checkpoints, and finish annual reviews; managers approve and rate; HR controls cycle windows and org-wide visibility.
 
