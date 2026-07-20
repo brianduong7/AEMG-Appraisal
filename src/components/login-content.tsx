@@ -118,7 +118,7 @@ export function LoginContent() {
       />
       <div className="relative z-10 mx-auto flex w-full max-w-6xl flex-1 flex-col px-6 py-8 lg:py-12">
         <header className="mb-10 flex items-center justify-between">
-          <AppLogo variant="login" href="/" className="drop-shadow-sm" />
+          <AppLogo variant="login" href="/" />
           <span className="hidden items-center gap-2 rounded-full border border-gold-400/40 bg-white/5 px-4 py-1.5 text-xs font-medium tracking-wide text-gold-300 sm:inline-flex">
             <span className="h-1.5 w-1.5 rounded-full bg-gold-400" aria-hidden />
             Performance Portal
