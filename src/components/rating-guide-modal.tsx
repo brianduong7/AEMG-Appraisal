@@ -63,7 +63,7 @@ export function RatingGuideModalTrigger({
       onClick={openRatingGuide}
       className={
         className ??
-        "text-sm font-medium text-sky-700 underline decoration-sky-700/40 underline-offset-2 hover:decoration-sky-700"
+        "text-sm font-medium text-navy-700 underline decoration-navy-700/40 underline-offset-2 hover:decoration-navy-700"
       }
     >
       {label}
@@ -136,7 +136,7 @@ function RatingGuideDialog({
                   key={n}
                   className="rounded-lg border border-zinc-200 bg-zinc-50/80"
                 >
-                  <h3 className="border-b border-zinc-200 bg-sky-100 px-4 py-2 text-sm font-semibold text-sky-950">
+                  <h3 className="border-b border-zinc-200 bg-navy-100 px-4 py-2 text-sm font-semibold text-navy-950">
                     <span className="tabular-nums">{n}.</span> {entry.title}
                   </h3>
                   <ul className="list-disc space-y-2 px-6 py-3 text-sm text-zinc-700">

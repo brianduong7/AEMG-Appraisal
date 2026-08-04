@@ -36,7 +36,7 @@ function WindowRow({
         disabled={busy}
         onClick={() => onChange(!checked)}
         className={`relative mt-0.5 h-6 w-11 shrink-0 rounded-full transition ${
-          checked ? "bg-navy-800" : "bg-slate-200"
+          checked ? "bg-navy-900" : "bg-slate-200"
         } disabled:opacity-50`}
       >
         <span

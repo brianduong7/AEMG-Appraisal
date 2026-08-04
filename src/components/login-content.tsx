@@ -99,9 +99,9 @@ export function LoginContent() {
     "flex items-center gap-2.5 rounded-xl border border-navy-100 bg-navy-50/60 px-3.5 py-3 transition focus-within:border-navy-600 focus-within:bg-white focus-within:ring-2 focus-within:ring-navy-600/15";
 
   return (
-    <div className="relative flex min-h-full flex-1 flex-col overflow-hidden bg-navy-950 text-white">
-      {/* Background: promo video under a navy brand overlay (gradient doubles as
-          the fallback while the video loads or if the CDN is unreachable). */}
+    <div className="relative flex min-h-full flex-1 flex-col overflow-hidden bg-navy-900 text-white">
+      {/* Background: promo video under a solid logo-blue overlay
+          (also the fallback while the video loads or if the CDN is unreachable). */}
       <video
         className="absolute inset-0 h-full w-full object-cover"
         src={PROMO_VIDEO_URL}
@@ -133,7 +133,7 @@ export function LoginContent() {
             </p>
             <h1 className="max-w-xl text-4xl font-semibold leading-tight tracking-tight">
               Grow with purpose.
-              <span className="mt-1 block bg-gradient-to-r from-gold-300 to-gold-500 bg-clip-text text-transparent">
+              <span className="mt-1 block text-gold-300">
                 Mid-year check-ins. Annual reviews. One portal.
               </span>
             </h1>
@@ -146,7 +146,7 @@ export function LoginContent() {
 
           {/* Sign-in card */}
           <div className="w-full justify-self-center lg:justify-self-end">
-            <div className="rounded-3xl bg-white p-8 text-[#0b1930] shadow-2xl ring-1 ring-white/40">
+            <div className="rounded-3xl bg-white p-8 text-navy-900 shadow-2xl ring-1 ring-white/40">
               <h2 className="text-xl font-semibold tracking-tight text-navy-900">
                 Sign in
               </h2>
@@ -210,7 +210,7 @@ export function LoginContent() {
 
                 <button
                   type="submit"
-                  className="w-full rounded-xl bg-gradient-to-r from-navy-900 to-navy-700 py-3 text-sm font-semibold text-white shadow-lg shadow-navy-900/25 transition hover:from-navy-800 hover:to-navy-600"
+                  className="w-full rounded-xl bg-navy-900 py-3 text-sm font-semibold text-white shadow-lg shadow-navy-900/25 transition hover:bg-navy-800"
                 >
                   Sign in
                 </button>

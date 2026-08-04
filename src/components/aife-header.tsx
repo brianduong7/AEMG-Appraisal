@@ -78,7 +78,7 @@ export function AifeHeader({ active }: { active: "list" | "detail" }) {
             <button
               type="button"
               onClick={() => setMenuOpen((open) => !open)}
-              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-gold-400 to-gold-600 text-sm font-bold text-navy-950 ring-2 ring-white/25 transition hover:ring-white/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-200"
+              className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-gold-400 text-sm font-bold text-navy-950 ring-2 ring-white/25 transition hover:ring-white/40 focus:outline-none focus-visible:ring-2 focus-visible:ring-gold-200"
               aria-expanded={menuOpen}
               aria-haspopup="menu"
               aria-label="Account menu"
@@ -88,7 +88,7 @@ export function AifeHeader({ active }: { active: "list" | "detail" }) {
             {menuOpen && (
               <div
                 role="menu"
-                className="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-lg border border-white/10 bg-navy-950/95 py-1 text-sm text-white shadow-xl backdrop-blur-sm"
+                className="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-lg border border-white/10 bg-navy-900/95 py-1 text-sm text-white shadow-xl backdrop-blur-sm"
               >
                 <div className="border-b border-white/10 px-3.5 py-2.5">
                   <p className="truncate font-medium text-white">

@@ -921,7 +921,7 @@ function AppraisalDetailInner({
 
       {employeeBanner && (
         <div
-          className="mb-6 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-900"
+          className="mb-6 rounded-lg border border-navy-200 bg-navy-50 px-4 py-3 text-sm text-navy-900"
           role="status"
         >
           KPIs submitted. Your manager
@@ -972,7 +972,7 @@ function AppraisalDetailInner({
       )}
       {skipLevelNotice && (
         <div
-          className="mb-6 rounded-lg border border-sky-200 bg-sky-50 px-4 py-3 text-sm text-sky-950"
+          className="mb-6 rounded-lg border border-navy-200 bg-navy-50 px-4 py-3 text-sm text-navy-950"
           role="status"
         >
           <strong>Demo notifications sent</strong> to the direct manager and one
@@ -1096,7 +1096,7 @@ function AppraisalDetailInner({
                       ? `Need ${MIN_KPIS}–${MAX_KPIS} KPIs with weights totalling 100%`
                       : undefined
                 }
-                className="rounded-lg bg-gradient-to-r from-navy-900 to-navy-700 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:from-navy-800 hover:to-navy-600 disabled:opacity-50"
+                className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:bg-navy-800 disabled:opacity-50"
                 onClick={() => saveEmployee("employee_submit")}
               >
                 Submit KPIs
@@ -1107,7 +1107,7 @@ function AppraisalDetailInner({
             <button
               type="button"
               disabled={busy}
-              className="rounded-lg bg-gradient-to-r from-navy-900 to-navy-700 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:from-navy-800 hover:to-navy-600 disabled:opacity-50"
+              className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:bg-navy-800 disabled:opacity-50"
               onClick={() => void approveKpis()}
             >
               Approve KPIs
@@ -1131,7 +1131,7 @@ function AppraisalDetailInner({
                     ? "Select a mid-year rating for every KPI"
                     : undefined
                 }
-                className="rounded-lg bg-gradient-to-r from-navy-900 to-navy-700 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:from-navy-800 hover:to-navy-600 disabled:opacity-50"
+                className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:bg-navy-800 disabled:opacity-50"
                 onClick={() => saveEmployeeMidYear("employee_midyear_submit")}
               >
                 Submit mid-year review
@@ -1156,7 +1156,7 @@ function AppraisalDetailInner({
                     ? "Complete all KPI and capability self-ratings to submit"
                     : undefined
                 }
-                className="rounded-lg bg-gradient-to-r from-navy-900 to-navy-700 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:from-navy-800 hover:to-navy-600 disabled:opacity-50"
+                className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:bg-navy-800 disabled:opacity-50"
                 onClick={() => saveEmployeeAnnual("employee_annual_submit")}
               >
                 Submit for manager review
@@ -1176,7 +1176,7 @@ function AppraisalDetailInner({
               <button
                 type="button"
                 disabled={busy}
-                className="rounded-lg bg-gradient-to-r from-navy-900 to-navy-700 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:from-navy-800 hover:to-navy-600 disabled:opacity-50"
+                className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:bg-navy-800 disabled:opacity-50"
                 onClick={() => void saveMidYear("manager_midyear_submit")}
               >
                 Submit mid-year review
@@ -1189,7 +1189,7 @@ function AppraisalDetailInner({
                 <button
                   type="button"
                   disabled={busy}
-                  className="rounded-lg bg-gradient-to-r from-gold-600 to-gold-500 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-gold-600/25 transition hover:from-gold-700 hover:to-gold-600 disabled:opacity-50"
+                  className="rounded-lg bg-gold-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-gold-600/25 transition hover:bg-gold-700 disabled:opacity-50"
                   onClick={() => void completeAppraisalToHr()}
                 >
                   Complete Appraisal
@@ -1206,7 +1206,7 @@ function AppraisalDetailInner({
                 className={
                   appraisal.status === "reviewed"
                     ? "rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-navy-950 shadow-sm transition hover:border-navy-300 disabled:opacity-50"
-                    : "rounded-lg bg-gradient-to-r from-navy-900 to-navy-700 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:from-navy-800 hover:to-navy-600 disabled:opacity-50"
+                    : "rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:bg-navy-800 disabled:opacity-50"
                 }
                 onClick={() => submitManagerReview()}
               >
@@ -2320,7 +2320,7 @@ function TabStepNav({
           onClick={() => onTabChange(next[0])}
           title={`Go to ${next[1]}`}
           aria-label={`Go to ${next[1]}`}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-r from-navy-900 to-navy-700 text-sm font-medium text-white shadow-sm transition hover:from-navy-800 hover:to-navy-600"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-navy-900 text-sm font-medium text-white shadow-sm transition hover:bg-navy-800"
         >
           →
         </button>

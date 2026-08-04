@@ -20,12 +20,13 @@ import {
   viewSubtitle,
   viewTitle,
 } from "@/lib/nav-roles";
+import { downloadHrAppraisalReport } from "@/lib/hr-export";
 
 function cycleStatusBadge(status: CycleStatus) {
   const map: Record<CycleStatus, string> = {
     not_started: "border border-slate-200 bg-slate-50 text-slate-500",
-    kpi_created: "border border-sky-200 bg-sky-50 text-sky-800",
-    kpi_approved: "border border-indigo-200 bg-indigo-50 text-indigo-800",
+    kpi_created: "border border-navy-200 bg-navy-50 text-navy-800",
+    kpi_approved: "border border-navy-300 bg-navy-100 text-navy-900",
     draft: "border border-gold-300 bg-gold-50 text-gold-700",
     submitted: "border border-navy-200 bg-navy-50 text-navy-800",
     completed: "border border-emerald-200 bg-emerald-50 text-emerald-800",
@@ -47,9 +48,9 @@ function CycleStatusPill({ status }: { status: CycleStatus }) {
               : status === "draft"
                 ? "bg-gold-500"
                 : status === "kpi_created"
-                  ? "bg-sky-500"
+                  ? "bg-navy-500"
                   : status === "kpi_approved"
-                    ? "bg-indigo-500"
+                    ? "bg-navy-800"
                     : "bg-slate-300"
         }`}
         aria-hidden
@@ -385,6 +386,34 @@ export function HomeContent() {
                     className="w-72 max-w-full"
                   />
                 )}
+              {caps.canSuperAdmin && (
+                <button
+                  type="button"
+                  disabled={!visibleAppraisals || visibleAppraisals.length === 0}
+                  title="Export HR report (CSV)"
+                  className="inline-flex items-center gap-2 rounded-lg border border-navy-200 bg-white px-3.5 py-2 text-sm font-semibold text-navy-900 shadow-sm transition hover:border-navy-400 hover:bg-navy-50 disabled:cursor-not-allowed disabled:opacity-50"
+                  onClick={() => {
+                    if (!visibleAppraisals?.length) return;
+                    downloadHrAppraisalReport(visibleAppraisals, cycleYear);
+                  }}
+                >
+                  <svg
+                    className="h-4 w-4 shrink-0"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                    aria-hidden
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M3 16.5v2.25A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75V16.5M16.5 12L12 16.5m0 0L7.5 12m4.5 4.5V3"
+                    />
+                  </svg>
+                  Export report
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
@@ -414,7 +443,7 @@ export function HomeContent() {
                 <button
                   type="button"
                   disabled={createBusy}
-                  className="rounded-lg bg-gradient-to-r from-navy-900 to-navy-700 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:from-navy-800 hover:to-navy-600 disabled:cursor-not-allowed disabled:opacity-50"
+                  className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-50"
                   onClick={() => createAppraisalForOwner(myOwnerId!)}
                 >
                   {createBusy ? "Creating…" : "+ New Appraisal"}
@@ -439,7 +468,7 @@ export function HomeContent() {
                 <button
                   type="button"
                   disabled={createBusy}
-                  className="mt-4 rounded-lg bg-gradient-to-r from-navy-900 to-navy-700 px-5 py-2.5 text-sm font-semibold text-white shadow-md disabled:cursor-not-allowed disabled:opacity-50"
+                  className="mt-4 rounded-lg bg-navy-900 px-5 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-50"
                   onClick={() => createAppraisalForOwner(myOwnerId!)}
                 >
                   {createBusy ? "Creating…" : "Create first appraisal"}
