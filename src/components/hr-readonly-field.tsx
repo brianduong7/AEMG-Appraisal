@@ -7,11 +7,14 @@ export function HrReadonlyField({
   value,
   required: isRequired,
   className,
+  hint,
 }: {
   label: string;
   value: string;
   required?: boolean;
   className?: string;
+  /** Optional warning line under the value, e.g. a stale-snapshot flag. */
+  hint?: string;
 }) {
   return (
     <div className={className}>
@@ -25,6 +28,9 @@ export function HrReadonlyField({
       >
         {value?.trim() ? value : "—"}
       </div>
+      {hint && (
+        <p className="mt-1 text-xs font-medium text-amber-700">{hint}</p>
+      )}
     </div>
   );
 }

@@ -21,16 +21,25 @@ function migrateMidYearStatus(
   annualStatus: unknown,
   kpis: unknown
 ): CycleStatus {
-  /* A completed annual implies the mid-year checkpoint already passed —
-     legacy rows predate the mid-year cycle and must not report Not Started. */
-  if (annualStatus === "completed" && (raw == null || raw === "not_started")) {
+  /*
+   * A completed annual implies the mid-year checkpoint already passed —
+   * legacy rows predate the mid-year cycle and must not report Not Started.
+   *
+   * `raw == null` only — NOT `|| raw === "not_started"`. Once a record has
+   * ever been through migrateAppraisal (i.e. always, after creation), it
+   * carries an explicit midYearStatus string, so "not_started" here is no
+   * longer distinguishable from genuinely-missing legacy data. HR's admin
+   * override (api "hr_update") can legitimately set status="completed" while
+   * leaving midYearStatus="not_started" on purpose — that must not be
+   * silently overwritten on the next read. `raw == null` (field truly absent
+   * from old on-disk JSON) is the only case this migration should still fire
+   * for.
+   */
+  if (annualStatus === "completed" && raw == null) {
     return "completed";
   }
   /* Legacy: KPIs submitted but mid-year never started → KPI Created. */
-  if (
-    annualStatus === "submitted" &&
-    (raw == null || raw === "not_started")
-  ) {
+  if (annualStatus === "submitted" && raw == null) {
     return "kpi_created";
   }
   /* Legacy "draft" with no mid-year ratings yet was the old post-KPI state. */
@@ -209,9 +218,15 @@ export function migrateAppraisal(raw: unknown): Appraisal {
   const englishName = directory
     ? directory.englishName
     : String(a.englishName ?? a.employeeName ?? "");
-  const managerName = directory
-    ? directory.managerName
-    : String(a.managerName ?? "");
+  /**
+   * Manager is a point-in-time snapshot, not a live lookup — unlike
+   * employeeName/englishName above, it must NOT resync to the directory on
+   * every read, or a later promotion/reorg/resignation would silently rewrite
+   * who reviewed a past appraisal. Only backfill from the directory when the
+   * stored record genuinely has nothing yet (new/legacy rows).
+   */
+  const storedManagerName = String(a.managerName ?? "").trim();
+  const managerName = storedManagerName || directory?.managerName || "";
 
   return {
     id: String(a.id ?? ""),

@@ -8,8 +8,10 @@ import {
 import { getReviewWindows } from "@/lib/settings-store";
 import type {
   Appraisal,
+  AppraisalStatus,
   CapabilityId,
   CapabilityRow,
+  CycleStatus,
   KpiRow,
   MidYearRating,
 } from "@/lib/types";
@@ -174,6 +176,73 @@ function normalizeCapabilitiesFromEmployee(
     );
   });
 }
+
+/**
+ * HR row normalizers. Unlike the employee/manager variants above, HR is
+ * authoritative and can write every field on a row (self rating, manager
+ * rating, mid-year rating, comments) in one save — HR is the admin override,
+ * not a phase-gated participant.
+ */
+function normalizeKpisFromHr(rows: unknown[]): KpiRow[] {
+  return rows.slice(0, MAX_KPIS).map((row) => {
+    const r = row as Record<string, unknown>;
+    return {
+      goalsAndKpis: String(r.goalsAndKpis ?? ""),
+      weightPercent: Math.min(100, Math.max(0, Number(r.weightPercent) || 0)),
+      dueDate: String(r.dueDate ?? ""),
+      selfRating: parseOptionalRating(r.selfRating),
+      managerRating: parseOptionalRating(r.managerRating),
+      managerComments: String(r.managerComments ?? ""),
+      midYearRating: parseMidYearRating(r.midYearRating),
+      midYearComment: String(r.midYearComment ?? ""),
+    };
+  });
+}
+
+function normalizeCapabilitiesFromHr(rows: unknown[]): CapabilityRow[] {
+  const byId = new Map<CapabilityId, CapabilityRow>();
+  if (Array.isArray(rows)) {
+    for (const row of rows) {
+      const r = row as Record<string, unknown>;
+      const id = r.id as CapabilityId;
+      if (!CAPABILITY_ORDER.includes(id)) continue;
+      byId.set(id, {
+        id,
+        selfRating: parseOptionalRating(r.selfRating),
+        managerRating: parseOptionalRating(r.managerRating),
+        managerComments: String(r.managerComments ?? ""),
+        midYearRating: parseOptionalRating(r.midYearRating),
+        midYearComment: String(r.midYearComment ?? ""),
+      });
+    }
+  }
+  return CAPABILITY_ORDER.map(
+    (id) =>
+      byId.get(id) ?? {
+        id,
+        selfRating: null,
+        managerRating: null,
+        managerComments: "",
+        midYearRating: null,
+        midYearComment: "",
+      }
+  );
+}
+
+const HR_STATUS_OPTIONS: AppraisalStatus[] = [
+  "draft",
+  "submitted",
+  "reviewed",
+  "completed",
+];
+const HR_CYCLE_STATUS_OPTIONS: CycleStatus[] = [
+  "not_started",
+  "kpi_created",
+  "kpi_approved",
+  "draft",
+  "submitted",
+  "completed",
+];
 
 export async function GET(
   _request: Request,
@@ -714,6 +783,76 @@ export async function PATCH(
         },
         { status: 409 }
       );
+    }
+    return NextResponse.json(next);
+  }
+
+  if (action === "hr_update") {
+    if (!data || typeof data !== "object") {
+      return NextResponse.json({ error: "Invalid data" }, { status: 400 });
+    }
+    const d = data as Record<string, unknown>;
+
+    if (Array.isArray(d.kpis) && d.kpis.length > MAX_KPIS) {
+      return NextResponse.json(
+        { error: `Maximum ${MAX_KPIS} KPIs` },
+        { status: 400 }
+      );
+    }
+
+    /**
+     * HR is the admin override: no status/window gating. Every field is
+     * optional in the payload — omitted fields keep their current value, so
+     * the client can send just a status change, just content, or both.
+     */
+    const next = await updateAppraisal(id, (current) => {
+      const kpis = Array.isArray(d.kpis)
+        ? normalizeKpisFromHr(d.kpis)
+        : current.kpis;
+      const capabilities = Array.isArray(d.capabilities)
+        ? normalizeCapabilitiesFromHr(d.capabilities)
+        : current.capabilities;
+      const status =
+        typeof d.status === "string" &&
+        HR_STATUS_OPTIONS.includes(d.status as AppraisalStatus)
+          ? (d.status as AppraisalStatus)
+          : current.status;
+      const midYearStatus =
+        typeof d.midYearStatus === "string" &&
+        HR_CYCLE_STATUS_OPTIONS.includes(d.midYearStatus as CycleStatus)
+          ? (d.midYearStatus as CycleStatus)
+          : current.midYearStatus;
+      const managerOverallOverride =
+        d.managerOverallOverride === null
+          ? null
+          : d.managerOverallOverride !== undefined
+            ? parseOptionalRating(d.managerOverallOverride)
+            : current.managerOverallOverride;
+
+      return {
+        ...current,
+        kpis,
+        capabilities,
+        employeeComments:
+          typeof d.employeeComments === "string"
+            ? d.employeeComments
+            : current.employeeComments,
+        managerComments:
+          typeof d.managerComments === "string"
+            ? d.managerComments
+            : current.managerComments,
+        midYearManagerComments:
+          typeof d.midYearManagerComments === "string"
+            ? d.midYearManagerComments
+            : current.midYearManagerComments,
+        status,
+        midYearStatus,
+        managerOverallOverride,
+      };
+    });
+
+    if (!next) {
+      return NextResponse.json({ error: "Appraisal not found" }, { status: 404 });
     }
     return NextResponse.json(next);
   }

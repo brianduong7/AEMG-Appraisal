@@ -5,11 +5,14 @@ import { useRouter } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import type {
   Appraisal,
+  AppraisalStatus,
+  CycleStatus,
   KpiRow,
   MidYearRating,
   ReviewWindowSettings,
 } from "@/lib/types";
 import {
+  CYCLE_STATUS_LABELS,
   DEFAULT_REVIEW_WINDOWS,
   MAX_KPIS,
   MIN_KPIS,
@@ -22,6 +25,7 @@ import {
   DEMO_COMPANY_NAME,
   DEMO_HR,
   DEMO_SKIP_LEVEL_MANAGER,
+  currentManagerNameForOwner,
   employmentProfileFromUser,
   findMockUser,
   overviewProfileForAppraisal,
@@ -78,6 +82,16 @@ const APPRAISAL_TABS = [
   ["overall", "Overall"],
 ] as const;
 
+/** HR-only — appended to the tab bar, never part of Prev/Next stepping. */
+const HR_ADMIN_TAB = ["admin", "HR Admin"] as const;
+
+const HR_STATUS_OPTIONS: { value: AppraisalStatus; label: string }[] = [
+  { value: "draft", label: "Draft" },
+  { value: "submitted", label: "Submitted" },
+  { value: "reviewed", label: "Reviewed" },
+  { value: "completed", label: "Completed" },
+];
+
 /** Shared Review-cycles layout — Mid-Year and Annual use the same 2-col grid. */
 const REVIEW_CYCLE_GRID =
   "grid grid-cols-1 gap-3 sm:grid-cols-2 sm:items-start sm:gap-x-4";
@@ -88,7 +102,9 @@ const REVIEW_CYCLE_SECTION_TITLE =
 const REVIEW_CYCLE_VALUE =
   "min-h-7 text-sm leading-snug text-navy-950";
 
-type AppraisalTabId = (typeof APPRAISAL_TABS)[number][0];
+type AppraisalTabId =
+  | (typeof APPRAISAL_TABS)[number][0]
+  | (typeof HR_ADMIN_TAB)[0];
 
 function initialDraftForRole(
   appraisal: Appraisal,
@@ -332,6 +348,24 @@ function AppraisalDetailInner({
     DEFAULT_REVIEW_WINDOWS
   );
   const [skipLevelNotice, setSkipLevelNotice] = useState(false);
+
+  /**
+   * HR admin override — unlike employee/manager drafts, HR can edit every
+   * field and every status regardless of the current phase, so this is a
+   * single full-appraisal draft rather than a phase-scoped one.
+   */
+  const [hrDraft, setHrDraft] = useState<Appraisal | null>(
+    role === "hr" ? cloneAppraisal(appraisal) : null
+  );
+  const [hrSaving, setHrSaving] = useState(false);
+  const [hrError, setHrError] = useState<string | null>(null);
+  const [hrSuccess, setHrSuccess] = useState(false);
+  useEffect(() => {
+    setHrDraft(role === "hr" ? cloneAppraisal(appraisal) : null);
+    setHrError(null);
+    setHrSuccess(false);
+  }, [appraisal, role]);
+
   const [activeTab, setActiveTab] = useState<AppraisalTabId>("overview");
   const [ratingLegendOpen, setRatingLegendOpen] = useState(false);
   const [nineBoxModalOpen, setNineBoxModalOpen] = useState(false);
@@ -606,6 +640,52 @@ function AppraisalDetailInner({
     }
   }
 
+  /**
+   * HR admin override: writes every field on `hrDraft`, plus any status
+   * override, in one PATCH — no phase gating, no window checks. See
+   * api/appraisals/[id]/route.ts's "hr_update" action.
+   */
+  async function saveHrChanges() {
+    if (!hrDraft) return;
+    setHrSaving(true);
+    setHrError(null);
+    setHrSuccess(false);
+    try {
+      const res = await fetch(`/api/appraisals/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "hr_update",
+          data: {
+            kpis: hrDraft.kpis,
+            capabilities: hrDraft.capabilities,
+            employeeComments: hrDraft.employeeComments,
+            managerComments: hrDraft.managerComments,
+            midYearManagerComments: hrDraft.midYearManagerComments,
+            status: hrDraft.status,
+            midYearStatus: hrDraft.midYearStatus,
+            managerOverallOverride: hrDraft.managerOverallOverride,
+          },
+        }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setHrError(
+          typeof body?.error === "string" ? body.error : "Request failed."
+        );
+        return;
+      }
+      const next = body as Appraisal;
+      setAppraisal(next);
+      saveAppraisalBootstrap(next);
+      setHrSuccess(true);
+    } catch {
+      setHrError("Network error.");
+    } finally {
+      setHrSaving(false);
+    }
+  }
+
   async function saveEmployeeMidYear(
     action: "employee_midyear_save" | "employee_midyear_submit"
   ) {
@@ -871,6 +951,22 @@ function AppraisalDetailInner({
   ]);
 
   const levelForFramework = identity.mLevel;
+
+  /**
+   * `appraisal.managerName` is a point-in-time snapshot (see
+   * `overviewProfileForAppraisal`). Compare it against the employee's manager
+   * today to flag drift — promotion, reorg, resignation — without ever
+   * rewriting the historical record itself.
+   */
+  const currentManagerName = currentManagerNameForOwner(appraisal.ownerUserId);
+  const managerChanged =
+    appraisal.status !== "draft" &&
+    !!appraisal.managerName &&
+    !!currentManagerName &&
+    appraisal.managerName !== currentManagerName;
+  const managerHint = managerChanged
+    ? `Manager has changed since this appraisal was created. Currently: ${currentManagerName}.`
+    : undefined;
 
   if (!mode || (mode === "employee" && !user)) {
     return (
@@ -1221,20 +1317,22 @@ function AppraisalDetailInner({
 
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3 border-b border-slate-200">
         <div className="flex flex-wrap gap-1">
-          {APPRAISAL_TABS.map(([id, label]) => (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setActiveTab(id)}
-              className={`relative border-b-2 px-4 py-2.5 text-sm font-medium transition ${
-                activeTab === id
-                  ? "border-gold-500 text-navy-900"
-                  : "border-transparent text-slate-500 hover:text-navy-800"
-              }`}
-            >
-              {label}
-            </button>
-          ))}
+          {(isHr ? [...APPRAISAL_TABS, HR_ADMIN_TAB] : APPRAISAL_TABS).map(
+            ([id, label]) => (
+              <button
+                key={id}
+                type="button"
+                onClick={() => setActiveTab(id)}
+                className={`relative border-b-2 px-4 py-2.5 text-sm font-medium transition ${
+                  activeTab === id
+                    ? "border-gold-500 text-navy-900"
+                    : "border-transparent text-slate-500 hover:text-navy-800"
+                } ${id === "admin" ? "font-semibold text-gold-700" : ""}`}
+              >
+                {label}
+              </button>
+            )
+          )}
         </div>
         <TabStepNav activeTab={activeTab} onTabChange={setActiveTab} />
       </div>
@@ -1924,7 +2022,8 @@ function AppraisalDetailInner({
                   />
                   <HrReadonlyField
                     label="Manager"
-                    value={identity.managerName}
+                    value={appraisal.managerName}
+                    hint={managerHint}
                   />
                   <HrReadonlyField
                     label="Department"
@@ -2170,6 +2269,320 @@ function AppraisalDetailInner({
                 This appraisal was submitted. You cannot edit employee comments
                 anymore.
               </p>
+            )}
+
+            {activeTab === "admin" && isHr && hrDraft && (
+              <div className="rounded-xl border border-gold-300/70 bg-white p-6 shadow-sm">
+                <section className="space-y-6">
+                  <div>
+                    <h2 className="text-lg font-semibold text-black">
+                      HR Admin
+                    </h2>
+                    <p className="mt-1 text-sm text-zinc-600">
+                      Full override — HR can edit any field and set any
+                      status directly, regardless of the normal workflow
+                      gates. Changes here bypass employee/manager submit
+                      rules.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-zinc-500">
+                        Annual Status
+                      </label>
+                      <select
+                        className={inputEnterprise}
+                        value={hrDraft.status}
+                        onChange={(e) =>
+                          setHrDraft({
+                            ...hrDraft,
+                            status: e.target.value as AppraisalStatus,
+                          })
+                        }
+                      >
+                        {HR_STATUS_OPTIONS.map((o) => (
+                          <option key={o.value} value={o.value}>
+                            {o.label}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-zinc-500">
+                        Mid-Year Status
+                      </label>
+                      <select
+                        className={inputEnterprise}
+                        value={hrDraft.midYearStatus}
+                        onChange={(e) =>
+                          setHrDraft({
+                            ...hrDraft,
+                            midYearStatus: e.target.value as CycleStatus,
+                          })
+                        }
+                      >
+                        {(
+                          Object.keys(
+                            CYCLE_STATUS_LABELS
+                          ) as CycleStatus[]
+                        ).map((v) => (
+                          <option key={v} value={v}>
+                            {CYCLE_STATUS_LABELS[v]}
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="mb-2 text-sm font-semibold text-black">
+                      KPIs
+                    </h3>
+                    <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
+                      <table className="w-full min-w-[56rem] border-collapse text-left text-sm">
+                        <thead>
+                          <tr className="border-b border-zinc-200 bg-zinc-100 text-xs font-semibold uppercase tracking-wide text-zinc-700">
+                            <th className="w-10 px-2 py-2.5">No.</th>
+                            <th className="min-w-52 px-2 py-2.5">KPI</th>
+                            <th className="w-24 px-2 py-2.5">Weight (%)</th>
+                            <th className="w-32 px-2 py-2.5">Due date</th>
+                            <th className="w-40 px-2 py-2.5">Self rating</th>
+                            <th className="w-40 px-2 py-2.5">
+                              Manager rating
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {hrDraft.kpis.map((kpi, i) => (
+                            <tr
+                              key={i}
+                              className="border-b border-zinc-100 align-top last:border-b-0"
+                            >
+                              <td className="px-2 py-2 tabular-nums text-zinc-600">
+                                {i + 1}
+                              </td>
+                              <td className="px-2 py-2">
+                                <textarea
+                                  className={`${inputEnterprise} min-h-14 resize-y text-sm`}
+                                  rows={2}
+                                  value={kpi.goalsAndKpis}
+                                  onChange={(e) => {
+                                    const kpis = [...hrDraft.kpis];
+                                    kpis[i] = {
+                                      ...kpis[i],
+                                      goalsAndKpis: e.target.value,
+                                    };
+                                    setHrDraft({ ...hrDraft, kpis });
+                                  }}
+                                />
+                              </td>
+                              <td className="px-2 py-2">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={100}
+                                  className={inputEnterprise}
+                                  value={kpi.weightPercent}
+                                  onChange={(e) => {
+                                    const kpis = [...hrDraft.kpis];
+                                    kpis[i] = {
+                                      ...kpis[i],
+                                      weightPercent: Number(e.target.value) || 0,
+                                    };
+                                    setHrDraft({ ...hrDraft, kpis });
+                                  }}
+                                />
+                              </td>
+                              <td className="px-2 py-2">
+                                <input
+                                  type="date"
+                                  className={inputEnterprise}
+                                  value={kpi.dueDate}
+                                  onChange={(e) => {
+                                    const kpis = [...hrDraft.kpis];
+                                    kpis[i] = {
+                                      ...kpis[i],
+                                      dueDate: e.target.value,
+                                    };
+                                    setHrDraft({ ...hrDraft, kpis });
+                                  }}
+                                />
+                              </td>
+                              <td className="px-2 py-2">
+                                <RatingSelect
+                                  value={kpi.selfRating}
+                                  onChange={(n) => {
+                                    const kpis = [...hrDraft.kpis];
+                                    kpis[i] = { ...kpis[i], selfRating: n };
+                                    setHrDraft({ ...hrDraft, kpis });
+                                  }}
+                                />
+                              </td>
+                              <td className="px-2 py-2">
+                                <RatingSelect
+                                  value={kpi.managerRating}
+                                  onChange={(n) => {
+                                    const kpis = [...hrDraft.kpis];
+                                    kpis[i] = { ...kpis[i], managerRating: n };
+                                    setHrDraft({ ...hrDraft, kpis });
+                                  }}
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div>
+                    <h3 className="mb-2 text-sm font-semibold text-black">
+                      Capabilities
+                    </h3>
+                    <div className="overflow-x-auto rounded-lg border border-zinc-200 bg-white">
+                      <table className="w-full min-w-[36rem] border-collapse text-left text-sm">
+                        <thead>
+                          <tr className="border-b border-zinc-200 bg-zinc-100 text-xs font-semibold uppercase tracking-wide text-zinc-700">
+                            <th className="min-w-36 px-2 py-2.5">
+                              Capability
+                            </th>
+                            <th className="w-40 px-2 py-2.5">Self rating</th>
+                            <th className="w-40 px-2 py-2.5">
+                              Manager rating
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {hrDraft.capabilities.map((cap, i) => (
+                            <tr
+                              key={cap.id}
+                              className="border-b border-zinc-100 align-top last:border-b-0"
+                            >
+                              <td className="px-2 py-2 font-medium text-black">
+                                {capabilityTitle(cap.id)}
+                              </td>
+                              <td className="px-2 py-2">
+                                <RatingSelect
+                                  value={cap.selfRating}
+                                  onChange={(n) => {
+                                    const capabilities = [
+                                      ...hrDraft.capabilities,
+                                    ];
+                                    capabilities[i] = {
+                                      ...capabilities[i],
+                                      selfRating: n,
+                                    };
+                                    setHrDraft({ ...hrDraft, capabilities });
+                                  }}
+                                />
+                              </td>
+                              <td className="px-2 py-2">
+                                <RatingSelect
+                                  value={cap.managerRating}
+                                  onChange={(n) => {
+                                    const capabilities = [
+                                      ...hrDraft.capabilities,
+                                    ];
+                                    capabilities[i] = {
+                                      ...capabilities[i],
+                                      managerRating: n,
+                                    };
+                                    setHrDraft({ ...hrDraft, capabilities });
+                                  }}
+                                />
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-zinc-500">
+                        Employee comments
+                      </label>
+                      <textarea
+                        className={`${inputEnterprise} min-h-24 resize-y text-sm`}
+                        rows={4}
+                        value={hrDraft.employeeComments}
+                        onChange={(e) =>
+                          setHrDraft({
+                            ...hrDraft,
+                            employeeComments: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1.5 block text-xs font-medium text-zinc-500">
+                        Manager comments
+                      </label>
+                      <textarea
+                        className={`${inputEnterprise} min-h-24 resize-y text-sm`}
+                        rows={4}
+                        value={hrDraft.managerComments}
+                        onChange={(e) =>
+                          setHrDraft({
+                            ...hrDraft,
+                            managerComments: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="mb-1.5 block text-xs font-medium text-zinc-500">
+                        Mid-year manager comments
+                      </label>
+                      <textarea
+                        className={`${inputEnterprise} min-h-20 resize-y text-sm`}
+                        rows={3}
+                        value={hrDraft.midYearManagerComments}
+                        onChange={(e) =>
+                          setHrDraft({
+                            ...hrDraft,
+                            midYearManagerComments: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  </div>
+
+                  {hrError && (
+                    <p className="text-sm text-red-600">{hrError}</p>
+                  )}
+                  {hrSuccess && !hrError && (
+                    <p className="text-sm text-emerald-700">
+                      Saved. Changes are live for the employee and manager.
+                    </p>
+                  )}
+
+                  <div className="flex items-center gap-3">
+                    <button
+                      type="button"
+                      disabled={hrSaving}
+                      onClick={() => saveHrChanges()}
+                      className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:bg-navy-800 disabled:opacity-50"
+                    >
+                      {hrSaving ? "Saving…" : "Save HR changes"}
+                    </button>
+                    <button
+                      type="button"
+                      disabled={hrSaving}
+                      onClick={() => {
+                        setHrDraft(cloneAppraisal(appraisal));
+                        setHrError(null);
+                        setHrSuccess(false);
+                      }}
+                      className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-navy-950 shadow-sm transition hover:border-navy-300 disabled:opacity-50"
+                    >
+                      Reset
+                    </button>
+                  </div>
+                </section>
+              </div>
             )}
           </div>
 
