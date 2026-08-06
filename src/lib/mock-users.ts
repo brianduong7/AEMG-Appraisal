@@ -126,18 +126,32 @@ export function reviewingManagerIdForOwner(ownerUserId: string): string | null {
 /**
  * Overview / display: prefer HR directory when `ownerUserId` matches a demo user,
  * so manager view and stored rows stay fully prefilled even if JSON lagged.
+ *
+ * `managerName` is the one exception — it is a point-in-time snapshot taken when
+ * the appraisal was created/submitted (`createAppraisal`, `employee_submit`), and
+ * must stay exactly as recorded even if the employee's manager later changes
+ * (promotion, reorg, resignation). Use `currentManagerNameForOwner` separately to
+ * detect drift and flag it in the UI — never to silently overwrite the record.
  */
 export function overviewProfileForAppraisal(
   ownerUserId: string,
   fallback: EmploymentProfile
 ): EmploymentProfile {
   const dir = findMockUser(ownerUserId);
-  if (dir) return employmentProfileFromUser(dir);
+  if (dir) return { ...employmentProfileFromUser(dir), managerName: fallback.managerName };
   return {
     ...fallback,
     employeeName: fallback.englishName || fallback.employeeName,
     managerName: fallback.managerName,
   };
+}
+
+/**
+ * Current (live) manager per the HR directory — for comparison against an
+ * appraisal's recorded `managerName` snapshot, not for display in place of it.
+ */
+export function currentManagerNameForOwner(ownerUserId: string): string | null {
+  return findMockUser(ownerUserId)?.managerName ?? null;
 }
 
 /** Formal full name for list / overview Employee field. */

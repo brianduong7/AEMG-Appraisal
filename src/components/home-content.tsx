@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Appraisal, CycleStatus } from "@/lib/types";
 import { annualCycleStatus, CYCLE_STATUS_LABELS } from "@/lib/types";
 import { appraisalListDisplayName } from "@/lib/entity-theme";
-import { DEMO_HR } from "@/lib/mock-users";
+import { DEMO_HR, MOCK_USERS } from "@/lib/mock-users";
 import { useRole } from "@/contexts/role-context";
 import { useSession } from "@/contexts/session-context";
 import { saveAppraisalBootstrap } from "@/lib/appraisal-bootstrap";
@@ -94,6 +94,8 @@ export function HomeContent() {
   );
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  /** HR admin: which employee to create a new appraisal for (org-wide, not just self). */
+  const [hrCreateOwnerId, setHrCreateOwnerId] = useState("");
 
   const managerId = managerProfile?.id ?? null;
   const caps = useMemo(
@@ -243,6 +245,21 @@ export function HomeContent() {
 
   const canCreateMyAppraisal = appraisalView === "my" && myOwnerId != null;
 
+  /**
+   * HR admin: appraisals can only be created for a demo login (MOCK_USERS) —
+   * the wider HR-seeded roster (erp-*) are pre-built demo records, not a
+   * live directory createAppraisal() can act on. See lib/mock-users.ts.
+   */
+  const hrCreateOptions = useMemo(
+    () =>
+      MOCK_USERS.map((u) => ({
+        id: u.id,
+        label: `${u.englishName || u.employeeName} — ${u.position}`,
+        searchText: `${u.englishName} ${u.employeeName} ${u.position}`,
+      })).sort((a, b) => a.label.localeCompare(b.label)),
+    []
+  );
+
   const reviewedAwaitingHr = useMemo(() => {
     if (!list || !caps.canSuperAdmin) return 0;
     return list.filter((a) => a.status === "reviewed").length;
@@ -386,6 +403,28 @@ export function HomeContent() {
                     className="w-72 max-w-full"
                   />
                 )}
+              {caps.canSuperAdmin && appraisalView === "admin" && (
+                <>
+                  <SearchableCombobox
+                    id="hr-create-for-employee"
+                    label="Create appraisal for"
+                    options={hrCreateOptions}
+                    value={hrCreateOwnerId}
+                    onChange={setHrCreateOwnerId}
+                    placeholder="Select employee…"
+                    className="w-64 max-w-full"
+                  />
+                  <button
+                    type="button"
+                    disabled={createBusy || !hrCreateOwnerId}
+                    className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-50"
+                    onClick={() => createAppraisalForOwner(hrCreateOwnerId)}
+                    title="HR: start a new appraisal on this employee's behalf"
+                  >
+                    {createBusy ? "Creating…" : "+ New for employee"}
+                  </button>
+                </>
+              )}
               {caps.canSuperAdmin && (
                 <button
                   type="button"
