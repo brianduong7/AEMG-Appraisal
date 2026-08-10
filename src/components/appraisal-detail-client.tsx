@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
 import type {
   Appraisal,
@@ -140,6 +140,7 @@ export function AppraisalDetailClient({
 }) {
   const { user, mode } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [appraisal, setAppraisal] = useState<Appraisal | null>(
     initialAppraisal
   );
@@ -241,6 +242,7 @@ export function AppraisalDetailClient({
       id={id}
       appraisal={appraisal}
       setAppraisal={(next) => setAppraisal(next)}
+      initialTab={searchParams.get("tab") === "admin" ? "admin" : "overview"}
     />
   );
 }
@@ -249,10 +251,15 @@ function AppraisalDetailInner({
   id,
   appraisal,
   setAppraisal,
+  initialTab,
 }: {
   id: string;
   appraisal: Appraisal;
   setAppraisal: (next: Appraisal) => void;
+  /** HR list "Edit" button links with ?tab=admin, read by the wrapper above
+   *  (useSearchParams needs to stay up there — see its own comment). Actual
+   *  access to the admin tab's content is still gated by isHr further down. */
+  initialTab: AppraisalTabId;
 }) {
   const { user: sessionUser, mode } = useSession();
   const { role, setRole } = useRole();
@@ -366,7 +373,7 @@ function AppraisalDetailInner({
     setHrSuccess(false);
   }, [appraisal, role]);
 
-  const [activeTab, setActiveTab] = useState<AppraisalTabId>("overview");
+  const [activeTab, setActiveTab] = useState<AppraisalTabId>(initialTab);
   const [ratingLegendOpen, setRatingLegendOpen] = useState(false);
   const [nineBoxModalOpen, setNineBoxModalOpen] = useState(false);
 

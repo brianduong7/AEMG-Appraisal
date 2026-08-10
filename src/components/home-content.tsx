@@ -6,7 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Appraisal, CycleStatus } from "@/lib/types";
 import { annualCycleStatus, CYCLE_STATUS_LABELS } from "@/lib/types";
 import { appraisalListDisplayName } from "@/lib/entity-theme";
-import { DEMO_HR, MOCK_USERS } from "@/lib/mock-users";
+import { DEMO_HR } from "@/lib/mock-users";
 import { useRole } from "@/contexts/role-context";
 import { useSession } from "@/contexts/session-context";
 import { saveAppraisalBootstrap } from "@/lib/appraisal-bootstrap";
@@ -94,8 +94,6 @@ export function HomeContent() {
   );
   const [createBusy, setCreateBusy] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  /** HR admin: which employee to create a new appraisal for (org-wide, not just self). */
-  const [hrCreateOwnerId, setHrCreateOwnerId] = useState("");
 
   const managerId = managerProfile?.id ?? null;
   const caps = useMemo(
@@ -245,21 +243,6 @@ export function HomeContent() {
 
   const canCreateMyAppraisal = appraisalView === "my" && myOwnerId != null;
 
-  /**
-   * HR admin: appraisals can only be created for a demo login (MOCK_USERS) —
-   * the wider HR-seeded roster (erp-*) are pre-built demo records, not a
-   * live directory createAppraisal() can act on. See lib/mock-users.ts.
-   */
-  const hrCreateOptions = useMemo(
-    () =>
-      MOCK_USERS.map((u) => ({
-        id: u.id,
-        label: `${u.englishName || u.employeeName} — ${u.position}`,
-        searchText: `${u.englishName} ${u.employeeName} ${u.position}`,
-      })).sort((a, b) => a.label.localeCompare(b.label)),
-    []
-  );
-
   const reviewedAwaitingHr = useMemo(() => {
     if (!list || !caps.canSuperAdmin) return 0;
     return list.filter((a) => a.status === "reviewed").length;
@@ -403,28 +386,6 @@ export function HomeContent() {
                     className="w-72 max-w-full"
                   />
                 )}
-              {caps.canSuperAdmin && appraisalView === "admin" && (
-                <>
-                  <SearchableCombobox
-                    id="hr-create-for-employee"
-                    label="Create appraisal for"
-                    options={hrCreateOptions}
-                    value={hrCreateOwnerId}
-                    onChange={setHrCreateOwnerId}
-                    placeholder="Select employee…"
-                    className="w-64 max-w-full"
-                  />
-                  <button
-                    type="button"
-                    disabled={createBusy || !hrCreateOwnerId}
-                    className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-50"
-                    onClick={() => createAppraisalForOwner(hrCreateOwnerId)}
-                    title="HR: start a new appraisal on this employee's behalf"
-                  >
-                    {createBusy ? "Creating…" : "+ New for employee"}
-                  </button>
-                </>
-              )}
               {caps.canSuperAdmin && (
                 <button
                   type="button"
@@ -551,8 +512,13 @@ export function HomeContent() {
                     <th className="px-4 py-3" scope="col">
                       Reference
                     </th>
-                    <th className="w-24 px-5 py-3 text-right" scope="col">
-                      <span className="sr-only">Open</span>
+                    <th
+                      className="w-24 px-5 py-3 text-right"
+                      scope="col"
+                    >
+                      <span className="sr-only">
+                        {caps.canSuperAdmin ? "Actions" : "Open"}
+                      </span>
                     </th>
                   </tr>
                 </thead>
@@ -610,9 +576,74 @@ export function HomeContent() {
                         {erpAppraisalDocId(cycleYear, a.id)}
                       </td>
                       <td className="px-5 py-3.5 text-right">
-                        <span className="text-xs font-semibold text-navy-600 opacity-0 transition group-hover:opacity-100">
-                          Open →
-                        </span>
+                        {caps.canSuperAdmin ? (
+                          <div className="flex items-center justify-end gap-2">
+                            <button
+                              type="button"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition hover:border-navy-300 hover:bg-navy-50 hover:text-navy-900"
+                              title="View"
+                              aria-label="View"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/appraisal/${a.id}`);
+                              }}
+                            >
+                              <svg
+                                className="h-4 w-4"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                                aria-hidden
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M2.036 12.322a1.012 1.012 0 010-.639C3.423 7.51 7.36 4.5 12 4.5c4.638 0 8.573 3.007 9.963 7.178.07.207.07.431 0 .639C20.577 16.49 16.64 19.5 12 19.5c-4.638 0-8.573-3.007-9.963-7.178z"
+                                />
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
+                                />
+                              </svg>
+                            </button>
+                            <button
+                              type="button"
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-navy-900 text-white shadow-sm transition hover:bg-navy-800"
+                              title="Edit (opens HR Admin)"
+                              aria-label="Edit"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                router.push(`/appraisal/${a.id}?tab=admin`);
+                              }}
+                            >
+                              <svg
+                                className="h-4 w-4"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth={2}
+                                aria-hidden
+                              >
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L10.582 16.07a4.5 4.5 0 01-1.897 1.13L6 18l.8-2.685a4.5 4.5 0 011.13-1.897l8.932-8.931z"
+                                />
+                                <path
+                                  strokeLinecap="round"
+                                  strokeLinejoin="round"
+                                  d="M15 6.75L17.25 9"
+                                />
+                              </svg>
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-xs font-semibold text-navy-600 opacity-0 transition group-hover:opacity-100">
+                            Open →
+                          </span>
+                        )}
                       </td>
                     </tr>
                   ))}
