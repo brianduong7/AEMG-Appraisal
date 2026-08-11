@@ -6,6 +6,7 @@ import {
   removeNotificationsForAppraisal,
 } from "@/lib/notification-store";
 import { getReviewWindows } from "@/lib/settings-store";
+import { mirrorKpiApproveToErpnext } from "@/lib/erpnext";
 import type {
   Appraisal,
   AppraisalStatus,
@@ -409,6 +410,12 @@ export async function PATCH(
       );
     }
     await removeNotificationsForAppraisal(id);
+    // Second ERPNext wiring slice: mirror the manager's KPI approval.
+    // Manager/HR-side action, safely callable under the shared service
+    // account (see erpnext.ts's module docstring) - unlike the employee-
+    // side actions above, which still aren't wired. Best-effort, never
+    // blocks the local response.
+    await mirrorKpiApproveToErpnext(next.ownerUserId);
     return NextResponse.json(next);
   }
 

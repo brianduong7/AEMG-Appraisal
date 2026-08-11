@@ -1,14 +1,29 @@
 /**
- * First real slice of the ERPNext integration: mirror a newly-created
- * appraisal into ERPNext (dev site) via `aemg_epm_frappe.api.appraisal.
- * create_appraisal`, so we can prove the wiring actually works end to end.
+ * ERPNext integration: mirror local appraisal actions into ERPNext (dev
+ * site) via `aemg_epm_frappe.api.appraisal.*`, one narrow, proven slice at
+ * a time. See erpnext-integration-status memory / project docs for the
+ * running list of what's wired vs still local-only.
  *
- * Deliberately NOT a full swap-over yet. The rest of the app (KPI submit,
- * approve, mid-year, annual, HR admin) still reads/writes the local JSON
- * store - ERPNext's response shape doesn't match the prototype's `Appraisal`
- * type, and translating that is its own follow-up piece of work, not done
- * here. This call is a side effect: best-effort, logged, never blocks or
- * breaks the local demo flow if ERPNext is unreachable.
+ * Everything here authenticates as a single shared service account
+ * (`epm-integration@aemg.demo`, roles: HR Manager/HR User/Employee/System
+ * Manager) - there is no per-user login yet on either side. That has a real
+ * consequence for which ERPNext endpoints we can call at all:
+ *
+ *   - Manager/HR-side endpoints (`approve_kpis`, `complete_mid_year`,
+ *     `submit_annual_manager`, `complete_appraisal`, ...) gate on
+ *     `_require_manager`, which HR roles bypass - epm-integration qualifies,
+ *     so these ARE safely callable for any employee's appraisal.
+ *   - Employee-side endpoints (`update_kpis`, `submit_kpis`,
+ *     `update_mid_year_ratings`, `submit_annual_self`, ...) gate on
+ *     `_require_self` (`doc.employee != current_employee(session user)`),
+ *     which has NO HR bypass. epm-integration has no linked Employee record,
+ *     so these calls fail for every employee. Wiring the employee-facing
+ *     half of the cycle requires resolving the shared-account-vs-real-
+ *     identity decision first (see memory) - not attempted here.
+ *
+ * All mirror calls are best-effort: logged, never thrown, and never allowed
+ * to block or break the local JSON-store demo flow if ERPNext is
+ * unreachable or rejects the call.
  */
 
 // Matches home-content.tsx's erpAppraisalCycleLabel() - ERPNext's seeded
@@ -41,56 +56,138 @@ function erpnextConfigured(): boolean {
   );
 }
 
+function erpnextAuthHeader(): string {
+  return `token ${process.env.ERPNEXT_API_KEY}:${process.env.ERPNEXT_API_SECRET}`;
+}
+
 /**
- * Best-effort mirror of a new appraisal into ERPNext. Never throws - a
- * failure here must not break the local demo flow. Returns the created
+ * POST to a whitelisted `aemg_epm_frappe.api.appraisal.*` method as the
+ * shared service account. Never throws - returns null on any failure
+ * (network, timeout, non-2xx, or an ERPNext-side frappe.throw), after
+ * logging the reason. Callers just check for null.
+ */
+async function erpnextMethodCall<T = Record<string, unknown>>(
+  method: string,
+  payload: Record<string, unknown>
+): Promise<T | null> {
+  if (!erpnextConfigured()) return null;
+  try {
+    const res = await fetch(
+      `${process.env.ERPNEXT_URL}/api/method/aemg_epm_frappe.api.appraisal.${method}`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: erpnextAuthHeader(),
+        },
+        body: JSON.stringify(payload),
+        // Best-effort only - do not let a slow/unreachable dev server hang
+        // the local action this is mirroring.
+        signal: AbortSignal.timeout(8000),
+      }
+    );
+    const body = (await res.json().catch(() => ({}))) as {
+      message?: T;
+      exception?: string;
+    };
+    if (!res.ok || body.message == null) {
+      console.error(
+        `[erpnext] ${method} failed:`,
+        res.status,
+        body.exception ?? body
+      );
+      return null;
+    }
+    return body.message;
+  } catch (e) {
+    console.error(`[erpnext] ${method} failed:`, e);
+    return null;
+  }
+}
+
+/**
+ * Best-effort mirror of a new appraisal into ERPNext. Returns the created
  * ERPNext Appraisal's `name` (doc id) on success, for logging/verification,
  * or null if skipped/failed.
  */
 export async function mirrorAppraisalCreateToErpnext(
   ownerUserId: string
 ): Promise<string | null> {
-  if (!erpnextConfigured()) return null;
-
   const employee = erpnextEmployeeIdForOwner(ownerUserId);
   if (!employee) return null;
 
-  const cycleYear = new Date().getFullYear();
-  const appraisalCycle = erpAppraisalCycleLabel(cycleYear);
+  const appraisalCycle = erpAppraisalCycleLabel(new Date().getFullYear());
+  const result = await erpnextMethodCall<{ name: string }>("create_appraisal", {
+    appraisal_cycle: appraisalCycle,
+    employee,
+  });
+  if (!result?.name) return null;
+  console.log(`[erpnext] mirrored appraisal for ${ownerUserId} -> ${result.name}`);
+  return result.name;
+}
+
+/**
+ * Look up the ERPNext Appraisal `name` for this owner's current-year cycle.
+ * We don't persist the ERPNext doc id on the local record (no schema change
+ * for this slice), so every mirror call re-resolves it by employee + cycle.
+ * Returns null if unconfigured, unmapped, unreachable, or genuinely not
+ * found (e.g. the create-appraisal mirror failed or hasn't run yet).
+ */
+async function findErpnextAppraisalName(ownerUserId: string): Promise<string | null> {
+  if (!erpnextConfigured()) return null;
+  const employee = erpnextEmployeeIdForOwner(ownerUserId);
+  if (!employee) return null;
+
+  const appraisalCycle = erpAppraisalCycleLabel(new Date().getFullYear());
+  const filters = encodeURIComponent(
+    JSON.stringify([
+      ["employee", "=", employee],
+      ["appraisal_cycle", "=", appraisalCycle],
+    ])
+  );
+  const fields = encodeURIComponent(JSON.stringify(["name"]));
 
   try {
     const res = await fetch(
-      `${process.env.ERPNEXT_URL}/api/method/aemg_epm_frappe.api.appraisal.create_appraisal`,
+      `${process.env.ERPNEXT_URL}/api/resource/Appraisal?filters=${filters}&fields=${fields}&order_by=creation desc&limit_page_length=1`,
       {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `token ${process.env.ERPNEXT_API_KEY}:${process.env.ERPNEXT_API_SECRET}`,
-        },
-        body: JSON.stringify({ appraisal_cycle: appraisalCycle, employee }),
-        // Best-effort only - do not let a slow/unreachable dev server hang
-        // the demo's create flow.
+        headers: { Authorization: erpnextAuthHeader() },
         signal: AbortSignal.timeout(8000),
       }
     );
     const body = (await res.json().catch(() => ({}))) as {
-      message?: { name?: string };
+      data?: { name: string }[];
       exception?: string;
     };
-    if (!res.ok || !body.message?.name) {
-      console.error(
-        "[erpnext] create_appraisal mirror failed:",
-        res.status,
-        body.exception ?? body
-      );
+    if (!res.ok || !body.data?.length) {
+      if (!res.ok) {
+        console.error("[erpnext] find appraisal failed:", res.status, body.exception ?? body);
+      }
       return null;
     }
-    console.log(
-      `[erpnext] mirrored appraisal for ${ownerUserId} -> ${body.message.name}`
-    );
-    return body.message.name;
+    return body.data[0]!.name;
   } catch (e) {
-    console.error("[erpnext] create_appraisal mirror failed:", e);
+    console.error("[erpnext] find appraisal failed:", e);
     return null;
   }
+}
+
+/**
+ * Mirror the manager's KPI approval (local `manager_kpi_approve`) into
+ * ERPNext via `approve_kpis`. Manager/HR-side, so it's safely callable
+ * under the shared service account - see module docstring. Best-effort:
+ * returns true only when ERPNext genuinely transitioned to KPI Approved.
+ */
+export async function mirrorKpiApproveToErpnext(ownerUserId: string): Promise<boolean> {
+  const appraisal = await findErpnextAppraisalName(ownerUserId);
+  if (!appraisal) return false;
+
+  const result = await erpnextMethodCall<{ aemg_kpi_status: string }>("approve_kpis", {
+    appraisal,
+  });
+  const ok = result?.aemg_kpi_status === "KPI Approved";
+  if (ok) {
+    console.log(`[erpnext] mirrored KPI approve for ${ownerUserId} -> ${appraisal}`);
+  }
+  return ok;
 }
