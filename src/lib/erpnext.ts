@@ -191,3 +191,28 @@ export async function mirrorKpiApproveToErpnext(ownerUserId: string): Promise<bo
   }
   return ok;
 }
+
+/**
+ * Mirror the manager's mid-year completion (local `manager_midyear_submit`)
+ * into ERPNext via `complete_mid_year`. Manager/HR-side, so it's safely
+ * callable under the shared service account - see module docstring.
+ * Best-effort: returns true only when ERPNext genuinely transitioned to
+ * Completed.
+ */
+export async function mirrorMidYearCompleteToErpnext(
+  ownerUserId: string,
+  managerComments: string
+): Promise<boolean> {
+  const appraisal = await findErpnextAppraisalName(ownerUserId);
+  if (!appraisal) return false;
+
+  const result = await erpnextMethodCall<{ aemg_mid_year_status: string }>(
+    "complete_mid_year",
+    { appraisal, manager_comments: managerComments }
+  );
+  const ok = result?.aemg_mid_year_status === "Completed";
+  if (ok) {
+    console.log(`[erpnext] mirrored mid-year complete for ${ownerUserId} -> ${appraisal}`);
+  }
+  return ok;
+}

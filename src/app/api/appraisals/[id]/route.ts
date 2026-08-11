@@ -6,7 +6,10 @@ import {
   removeNotificationsForAppraisal,
 } from "@/lib/notification-store";
 import { getReviewWindows } from "@/lib/settings-store";
-import { mirrorKpiApproveToErpnext } from "@/lib/erpnext";
+import {
+  mirrorKpiApproveToErpnext,
+  mirrorMidYearCompleteToErpnext,
+} from "@/lib/erpnext";
 import type {
   Appraisal,
   AppraisalStatus,
@@ -790,6 +793,15 @@ export async function PATCH(
         },
         { status: 409 }
       );
+    }
+    // Third ERPNext wiring slice: mirror the manager's mid-year completion.
+    // Manager/HR-side action, safely callable under the shared service
+    // account (see erpnext.ts's module docstring). Only fires on the actual
+    // finalize (manager_midyear_submit) - manager_midyear_save is a draft
+    // write with no ERPNext equivalent (complete_mid_year always finalizes).
+    // Best-effort, never blocks the local response.
+    if (action === "manager_midyear_submit") {
+      await mirrorMidYearCompleteToErpnext(next.ownerUserId, midYearManagerComments);
     }
     return NextResponse.json(next);
   }
