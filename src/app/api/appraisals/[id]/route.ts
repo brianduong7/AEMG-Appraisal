@@ -12,6 +12,9 @@ import {
   mirrorAnnualManagerSubmitToErpnext,
   mirrorAppraisalCompleteToErpnext,
   mirrorHrUpdateToErpnext,
+  mirrorKpiSubmitToErpnext,
+  mirrorMidYearEmployeeSubmitToErpnext,
+  mirrorAnnualSelfSubmitToErpnext,
 } from "@/lib/erpnext";
 import type {
   Appraisal,
@@ -388,6 +391,11 @@ export async function PATCH(
           employeeName: next.employeeName,
         });
       }
+      // First employee-side ERPNext wiring slice: mirror the employee's
+      // KPI submission. Authenticates as the employee's own ERPNext
+      // credentials, not the shared service account - see erpnext.ts's
+      // module docstring. Best-effort, never blocks the local response.
+      await mirrorKpiSubmitToErpnext(next.ownerUserId, next.kpis);
     }
     return NextResponse.json(next);
   }
@@ -491,6 +499,14 @@ export async function PATCH(
         { status: 409 }
       );
     }
+    // Second employee-side ERPNext wiring slice: mirror the employee's
+    // mid-year submit. Authenticates as the employee's own ERPNext
+    // credentials - see erpnext.ts's module docstring. Only fires on the
+    // actual finalize, not employee_midyear_save (draft-only, no ERPNext
+    // equivalent, same convention as the manager-side mirrors).
+    if (action === "employee_midyear_submit") {
+      await mirrorMidYearEmployeeSubmitToErpnext(next.ownerUserId, next.kpis);
+    }
     return NextResponse.json(next);
   }
 
@@ -566,6 +582,11 @@ export async function PATCH(
         managerUserId: next.reviewingManagerId ?? DEMO_MANAGER.id,
         employeeName: next.employeeName,
       });
+      // Third employee-side ERPNext wiring slice: mirror the employee's
+      // annual self-review submit. Authenticates as the employee's own
+      // ERPNext credentials - see erpnext.ts's module docstring.
+      // Best-effort, never blocks the local response.
+      await mirrorAnnualSelfSubmitToErpnext(next.ownerUserId, next.kpis, next.capabilities);
     }
     return NextResponse.json(next);
   }

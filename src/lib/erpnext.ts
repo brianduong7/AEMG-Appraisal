@@ -4,22 +4,33 @@
  * a time. See erpnext-integration-status memory / project docs for the
  * running list of what's wired vs still local-only.
  *
- * Everything here authenticates as a single shared service account
- * (`epm-integration@aemg.demo`, roles: HR Manager/HR User/Employee/System
- * Manager) - there is no per-user login yet on either side. That has a real
- * consequence for which ERPNext endpoints we can call at all:
+ * There is still no real per-user login on either side - the Next.js app's
+ * "logged in" user is one of four fixed demo logins (emma/mark/john/hr).
+ * What changed in this slice is WHICH ERPNext identity each mirror call
+ * authenticates as, because ERPNext's own endpoints split cleanly into two
+ * groups by what they gate on:
  *
  *   - Manager/HR-side endpoints (`approve_kpis`, `complete_mid_year`,
- *     `submit_annual_manager`, `complete_appraisal`, ...) gate on
- *     `_require_manager`, which HR roles bypass - epm-integration qualifies,
- *     so these ARE safely callable for any employee's appraisal.
+ *     `submit_annual_manager`, `complete_appraisal`, `hr_override_appraisal`,
+ *     ...) gate on `_require_manager` / HR-only, which the shared
+ *     `epm-integration@aemg.demo` service account satisfies (it holds HR
+ *     Manager/HR User/System Manager roles) - these keep using that one
+ *     shared account, via `erpnextAuthHeader()`.
  *   - Employee-side endpoints (`update_kpis`, `submit_kpis`,
- *     `update_mid_year_ratings`, `submit_annual_self`, ...) gate on
- *     `_require_self` (`doc.employee != current_employee(session user)`),
- *     which has NO HR bypass. epm-integration has no linked Employee record,
- *     so these calls fail for every employee. Wiring the employee-facing
- *     half of the cycle requires resolving the shared-account-vs-real-
- *     identity decision first (see memory) - not attempted here.
+ *     `update_mid_year_ratings`, `submit_annual_self`,
+ *     `update_capability_self_ratings`, ...) gate on `_require_self`
+ *     (`doc.employee != current_employee(session user)`), which has NO HR
+ *     bypass - epm-integration can never pass it for someone else's
+ *     appraisal. These now authenticate as that demo user's OWN ERPNext
+ *     credentials instead, via `ownerAuthHeader(ownerUserId)` - each of the
+ *     four demo Users on aemg-dev.local already had a linked Employee
+ *     record (from dev_seed.py) and the plain "Employee" role; they just
+ *     needed their own api_key/api_secret generated, which now live in
+ *     `.env.local` as `ERPNEXT_API_KEY_<NAME>` / `ERPNEXT_API_SECRET_<NAME>`.
+ *     This is still not real login - it's real ERPNext identity bolted onto
+ *     the existing fixed demo-login list. A future real-login flow would
+ *     replace `ownerAuthHeader`'s fixed lookup with something derived from
+ *     the actual signed-in user, not the four hardcoded demo credentials.
  *
  * All mirror calls are best-effort: logged, never thrown, and never allowed
  * to block or break the local JSON-store demo flow if ERPNext is
@@ -110,14 +121,43 @@ function erpnextAuthHeader(): string {
 }
 
 /**
- * POST to a whitelisted `aemg_epm_frappe.api.appraisal.*` method as the
- * shared service account. Never throws - returns null on any failure
- * (network, timeout, non-2xx, or an ERPNext-side frappe.throw), after
- * logging the reason. Callers just check for null.
+ * Per-demo-user ERPNext credentials, for the employee-self endpoints only
+ * (see module docstring). Each demo login's own `key:secret`, from a
+ * dedicated env var pair - not derivable from ERPNEXT_EMPLOYEE_ID, since
+ * that's an Employee id (a doc name) and this is a User's API credential.
+ */
+const OWNER_CREDENTIAL_ENV_SUFFIX: Record<string, string> = {
+  emma: "EMMA",
+  mark: "MARK",
+  john: "JOHN",
+  hr: "HR",
+};
+
+function ownerAuthHeader(ownerUserId: string): string | null {
+  const suffix = OWNER_CREDENTIAL_ENV_SUFFIX[ownerUserId];
+  if (!suffix) return null;
+  const key = process.env[`ERPNEXT_API_KEY_${suffix}`];
+  const secret = process.env[`ERPNEXT_API_SECRET_${suffix}`];
+  if (!key || !secret) return null;
+  return `token ${key}:${secret}`;
+}
+
+/**
+ * POST to a whitelisted `aemg_epm_frappe.api.appraisal.*` method. Never
+ * throws - returns null on any failure (network, timeout, non-2xx, or an
+ * ERPNext-side frappe.throw), after logging the reason. Callers just check
+ * for null.
+ *
+ * `authHeader` picks which identity this call authenticates as:
+ * `erpnextAuthHeader()` (the shared epm-integration account, for
+ * manager/HR-gated endpoints) or `ownerAuthHeader(ownerUserId)` (that
+ * employee's own credentials, required for `_require_self`-gated
+ * endpoints) - see module docstring.
  */
 async function erpnextMethodCall<T = Record<string, unknown>>(
   method: string,
-  payload: Record<string, unknown>
+  payload: Record<string, unknown>,
+  authHeader: string = erpnextAuthHeader()
 ): Promise<T | null> {
   if (!erpnextConfigured()) return null;
   try {
@@ -127,7 +167,7 @@ async function erpnextMethodCall<T = Record<string, unknown>>(
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          Authorization: erpnextAuthHeader(),
+          Authorization: authHeader,
         },
         body: JSON.stringify(payload),
         // Best-effort only - do not let a slow/unreachable dev server hang
@@ -427,6 +467,132 @@ export async function mirrorHrUpdateToErpnext(
   const ok = result?.name === appraisal;
   if (ok) {
     console.log(`[erpnext] mirrored HR override for ${ownerUserId} -> ${appraisal}`);
+  }
+  return ok;
+}
+
+/**
+ * Mirror the employee's initial KPI submission (local `employee_submit`)
+ * into ERPNext: writes the goal rows via `update_kpis`, then finalizes with
+ * `submit_kpis`. Employee-self, so - unlike every mirror above - this
+ * authenticates as that employee's own ERPNext credentials, not the shared
+ * service account; see module docstring. Best-effort: returns true only
+ * when ERPNext genuinely transitioned to KPI Created.
+ */
+export async function mirrorKpiSubmitToErpnext(
+  ownerUserId: string,
+  kpis: { goalsAndKpis: string; weightPercent: number; dueDate: string }[]
+): Promise<boolean> {
+  const auth = ownerAuthHeader(ownerUserId);
+  if (!auth) return false;
+  const appraisal = await findErpnextAppraisalName(ownerUserId);
+  if (!appraisal) return false;
+
+  const goals = kpis.map((k) => ({
+    kra: k.goalsAndKpis,
+    per_weightage: k.weightPercent,
+    aemg_due_date: k.dueDate || null,
+  }));
+  await erpnextMethodCall("update_kpis", { appraisal, goals }, auth);
+
+  const result = await erpnextMethodCall<{ aemg_kpi_status: string }>(
+    "submit_kpis",
+    { appraisal },
+    auth
+  );
+  const ok = result?.aemg_kpi_status === "KPI Created";
+  if (ok) {
+    console.log(`[erpnext] mirrored KPI submit for ${ownerUserId} -> ${appraisal}`);
+  }
+  return ok;
+}
+
+/**
+ * Mirror the employee's mid-year submit (local `employee_midyear_submit`)
+ * into ERPNext: writes each goal's On Track / Not on Track rating via
+ * `update_mid_year_ratings`, then finalizes with
+ * `submit_mid_year_employee`. Employee-self - see module docstring. Goal
+ * rows matched by position (`idx` 1-based, in local `kpis` order), same as
+ * the manager-side annual mirror. Only the rating is sent, not a comment -
+ * per-KPI mid-year comments are manager-owned in the prototype (see
+ * normalizeKpisFromEmployee's own note) and are mirrored separately via
+ * `mirrorMidYearCompleteToErpnext`.
+ */
+export async function mirrorMidYearEmployeeSubmitToErpnext(
+  ownerUserId: string,
+  kpis: { midYearRating: string | null }[]
+): Promise<boolean> {
+  const auth = ownerAuthHeader(ownerUserId);
+  if (!auth) return false;
+  const appraisal = await findErpnextAppraisalName(ownerUserId);
+  if (!appraisal) return false;
+
+  const ratings = kpis.map((k, i) => ({
+    idx: i + 1,
+    aemg_mid_year_rating: erpMidYearRating(k.midYearRating),
+  }));
+  await erpnextMethodCall("update_mid_year_ratings", { appraisal, ratings }, auth);
+
+  const result = await erpnextMethodCall<{ aemg_mid_year_status: string }>(
+    "submit_mid_year_employee",
+    { appraisal },
+    auth
+  );
+  const ok = result?.aemg_mid_year_status === "Submitted";
+  if (ok) {
+    console.log(`[erpnext] mirrored employee mid-year submit for ${ownerUserId} -> ${appraisal}`);
+  }
+  return ok;
+}
+
+/**
+ * Mirror the employee's annual self-review submit (local
+ * `employee_annual_submit`) into ERPNext: writes goal self-scores
+ * (`update_annual_self_ratings`) and capability self-ratings
+ * (`update_capability_self_ratings`), then finalizes with
+ * `submit_annual_self`. Employee-self - see module docstring. Goal rows
+ * matched by position, capability rows by the local `CapabilityId` ->
+ * ERPNext criteria-label map (same one the manager-side mirror uses).
+ */
+export async function mirrorAnnualSelfSubmitToErpnext(
+  ownerUserId: string,
+  kpis: { selfRating: number | null }[],
+  capabilities: { id: string; selfRating: number | null }[]
+): Promise<boolean> {
+  const auth = ownerAuthHeader(ownerUserId);
+  if (!auth) return false;
+  const appraisal = await findErpnextAppraisalName(ownerUserId);
+  if (!appraisal) return false;
+
+  const goalRatings = kpis.map((k, i) => ({ idx: i + 1, aemg_self_score: k.selfRating }));
+  await erpnextMethodCall(
+    "update_annual_self_ratings",
+    { appraisal, ratings: goalRatings },
+    auth
+  );
+
+  const capRatings = capabilities
+    .map((c) => {
+      const criteria = CAPABILITY_CRITERIA_LABEL[c.id];
+      return criteria ? { criteria, rating: c.selfRating } : null;
+    })
+    .filter((r): r is { criteria: string; rating: number | null } => r != null);
+  if (capRatings.length > 0) {
+    await erpnextMethodCall(
+      "update_capability_self_ratings",
+      { appraisal, ratings: capRatings },
+      auth
+    );
+  }
+
+  const result = await erpnextMethodCall<{ aemg_annual_status: string }>(
+    "submit_annual_self",
+    { appraisal },
+    auth
+  );
+  const ok = result?.aemg_annual_status === "Submitted";
+  if (ok) {
+    console.log(`[erpnext] mirrored annual self submit for ${ownerUserId} -> ${appraisal}`);
   }
   return ok;
 }
