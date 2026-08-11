@@ -9,6 +9,8 @@ import { getReviewWindows } from "@/lib/settings-store";
 import {
   mirrorKpiApproveToErpnext,
   mirrorMidYearCompleteToErpnext,
+  mirrorAnnualManagerSubmitToErpnext,
+  mirrorAppraisalCompleteToErpnext,
 } from "@/lib/erpnext";
 import type {
   Appraisal,
@@ -671,6 +673,11 @@ export async function PATCH(
       );
     }
     await removeNotificationsForAppraisal(id);
+    // Fourth ERPNext wiring slice: mirror the manager's annual review
+    // submit. Manager/HR-side, safely callable under the shared service
+    // account (see erpnext.ts's module docstring). Best-effort, never
+    // blocks the local response.
+    await mirrorAnnualManagerSubmitToErpnext(next.ownerUserId, next.kpis, next.capabilities);
     return NextResponse.json(next);
   }
 
@@ -694,6 +701,11 @@ export async function PATCH(
         { status: 409 }
       );
     }
+    // Fifth ERPNext wiring slice: mirror the manager's final sign-off.
+    // Manager/HR-side, safely callable under the shared service account
+    // (see erpnext.ts's module docstring). Best-effort, never blocks the
+    // local response.
+    await mirrorAppraisalCompleteToErpnext(next.ownerUserId, next.managerOverallOverride);
     return NextResponse.json(next);
   }
 

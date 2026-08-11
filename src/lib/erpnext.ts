@@ -48,6 +48,19 @@ export function erpnextEmployeeIdForOwner(ownerUserId: string): string | null {
   return ERPNEXT_EMPLOYEE_ID[ownerUserId] ?? null;
 }
 
+/**
+ * Local `CapabilityId` -> ERPNext `Employee Feedback Criteria` display name.
+ * Matches `CAPABILITY_ORDER` in types.ts against the criteria seeded on
+ * aemg-dev.local (confirmed by hand via a direct Appraisal read).
+ */
+const CAPABILITY_CRITERIA_LABEL: Record<string, string> = {
+  planning: "Planning",
+  leadership: "Leadership",
+  financial_management: "Financial Management",
+  strategic_execution: "Strategic Execution",
+  communication: "Communication",
+};
+
 function erpnextConfigured(): boolean {
   return Boolean(
     process.env.ERPNEXT_URL &&
@@ -213,6 +226,81 @@ export async function mirrorMidYearCompleteToErpnext(
   const ok = result?.aemg_mid_year_status === "Completed";
   if (ok) {
     console.log(`[erpnext] mirrored mid-year complete for ${ownerUserId} -> ${appraisal}`);
+  }
+  return ok;
+}
+
+/**
+ * Mirror the manager's annual review submit (local `manager_submit`) into
+ * ERPNext: writes goal + capability manager ratings, then finalizes via
+ * `submit_annual_manager`. Manager/HR-side, safely callable under the
+ * shared service account - see module docstring.
+ *
+ * Requires ERPNext's `aemg_annual_status` to already be "Submitted" (i.e.
+ * the employee's own `submit_annual_self` already ran there) - same
+ * employee-side prerequisite gap as the mid-year slice. Goal rows are
+ * matched by position (`idx` 1-based, in local `kpis` order) since we don't
+ * persist ERPNext's own row ids locally.
+ */
+export async function mirrorAnnualManagerSubmitToErpnext(
+  ownerUserId: string,
+  kpis: { managerRating: number | null }[],
+  capabilities: { id: string; managerRating: number | null }[]
+): Promise<boolean> {
+  const appraisal = await findErpnextAppraisalName(ownerUserId);
+  if (!appraisal) return false;
+
+  const goalRatings = kpis.map((k, i) => ({ idx: i + 1, score: k.managerRating }));
+  await erpnextMethodCall("update_annual_manager_ratings", { appraisal, ratings: goalRatings });
+
+  const capRatings = capabilities
+    .map((c) => {
+      const criteria = CAPABILITY_CRITERIA_LABEL[c.id];
+      return criteria ? { criteria, aemg_manager_rating: c.managerRating } : null;
+    })
+    .filter((r): r is { criteria: string; aemg_manager_rating: number | null } => r != null);
+  if (capRatings.length > 0) {
+    await erpnextMethodCall("update_capability_manager_ratings", {
+      appraisal,
+      ratings: capRatings,
+    });
+  }
+
+  const result = await erpnextMethodCall<{ aemg_annual_status: string }>(
+    "submit_annual_manager",
+    { appraisal }
+  );
+  const ok = result?.aemg_annual_status === "Reviewed";
+  if (ok) {
+    console.log(`[erpnext] mirrored annual manager submit for ${ownerUserId} -> ${appraisal}`);
+  }
+  return ok;
+}
+
+/**
+ * Mirror the manager's final sign-off (local `manager_complete`) into
+ * ERPNext via `complete_appraisal`, submitting the ERPNext doc (docstatus
+ * 0 -> 1). Manager/HR-side, safely callable under the shared service
+ * account - see module docstring. Requires ERPNext's `aemg_annual_status`
+ * to already be "Reviewed" (i.e. `submit_annual_manager` already ran).
+ */
+export async function mirrorAppraisalCompleteToErpnext(
+  ownerUserId: string,
+  managerOverallOverride: number | null
+): Promise<boolean> {
+  const appraisal = await findErpnextAppraisalName(ownerUserId);
+  if (!appraisal) return false;
+
+  const result = await erpnextMethodCall<{ aemg_annual_status: string }>(
+    "complete_appraisal",
+    {
+      appraisal,
+      manager_overall_override: managerOverallOverride ?? undefined,
+    }
+  );
+  const ok = result?.aemg_annual_status === "Completed";
+  if (ok) {
+    console.log(`[erpnext] mirrored appraisal complete for ${ownerUserId} -> ${appraisal}`);
   }
   return ok;
 }
