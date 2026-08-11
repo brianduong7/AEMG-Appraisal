@@ -61,6 +61,42 @@ const CAPABILITY_CRITERIA_LABEL: Record<string, string> = {
   communication: "Communication",
 };
 
+/** Local `MidYearRating` -> ERPNext's goal-row `aemg_mid_year_rating` Select. */
+function erpMidYearRating(raw: string | null): string {
+  if (raw === "on_track") return "On Track";
+  if (raw === "not_on_track") return "Not on Track";
+  // "early_access" has no ERPNext equivalent (not modeled on that side) -
+  // and null is simply unset. Both map to the field's own empty default.
+  return "";
+}
+
+/**
+ * Local `midYearStatus` (a single cycle-status enum: not_started ->
+ * kpi_created -> kpi_approved -> draft -> submitted -> completed) split
+ * into ERPNext's two separate fields. This split is exact - unlike the
+ * local `status` field (see hr-override docstring), `midYearStatus` and
+ * this pair genuinely encode the same concept.
+ */
+function erpKpiAndMidYearStatus(midYearStatus: string): {
+  aemg_kpi_status: string;
+  aemg_mid_year_status: string;
+} {
+  switch (midYearStatus) {
+    case "kpi_created":
+      return { aemg_kpi_status: "KPI Created", aemg_mid_year_status: "Not Started" };
+    case "kpi_approved":
+      return { aemg_kpi_status: "KPI Approved", aemg_mid_year_status: "Not Started" };
+    case "draft":
+      return { aemg_kpi_status: "KPI Approved", aemg_mid_year_status: "Draft" };
+    case "submitted":
+      return { aemg_kpi_status: "KPI Approved", aemg_mid_year_status: "Submitted" };
+    case "completed":
+      return { aemg_kpi_status: "KPI Approved", aemg_mid_year_status: "Completed" };
+    default:
+      return { aemg_kpi_status: "Not Started", aemg_mid_year_status: "Not Started" };
+  }
+}
+
 function erpnextConfigured(): boolean {
   return Boolean(
     process.env.ERPNEXT_URL &&
@@ -301,6 +337,96 @@ export async function mirrorAppraisalCompleteToErpnext(
   const ok = result?.aemg_annual_status === "Completed";
   if (ok) {
     console.log(`[erpnext] mirrored appraisal complete for ${ownerUserId} -> ${appraisal}`);
+  }
+  return ok;
+}
+
+/**
+ * Mirror HR's admin override (local `hr_update`) into ERPNext via the
+ * dedicated `hr_override_appraisal` endpoint (AEMG-EPM-Frappe branch
+ * `epm-workflow-logic`, not yet on `main`) - the only endpoint in that
+ * module that skips the phase/window state machine, matching hr_update's
+ * own "HR can fix anything, any time" contract. Always sends the full
+ * current record (not just the changed fields) - simpler than tracking
+ * which fields the HR payload actually touched, and idempotent either way.
+ *
+ * Deliberately does NOT send the local `status` field - see
+ * hr_override_appraisal's docstring for why that would silently corrupt
+ * `aemg_annual_status` (the two encode different phases, not the same
+ * concept). `midYearStatus` IS sent, split into ERPNext's two fields via
+ * `erpKpiAndMidYearStatus` - that split is a safe 1:1 translation.
+ */
+export async function mirrorHrUpdateToErpnext(
+  ownerUserId: string,
+  fields: {
+    kpis: {
+      goalsAndKpis: string;
+      weightPercent: number;
+      dueDate: string;
+      selfRating: number | null;
+      managerRating: number | null;
+      midYearRating: string | null;
+    }[];
+    capabilities: {
+      id: string;
+      selfRating: number | null;
+      managerRating: number | null;
+      midYearRating: number | null;
+      midYearComment: string;
+    }[];
+    employeeComments: string;
+    managerComments: string;
+    midYearManagerComments: string;
+    midYearStatus: string;
+    managerOverallOverride: number | null;
+  }
+): Promise<boolean> {
+  const appraisal = await findErpnextAppraisalName(ownerUserId);
+  if (!appraisal) return false;
+
+  const goals = fields.kpis.map((k) => ({
+    kra: k.goalsAndKpis,
+    per_weightage: k.weightPercent,
+    aemg_due_date: k.dueDate || null,
+    aemg_self_score: k.selfRating,
+    score: k.managerRating,
+    aemg_mid_year_rating: erpMidYearRating(k.midYearRating),
+  }));
+
+  const capabilities = fields.capabilities
+    .map((c) => {
+      const criteria = CAPABILITY_CRITERIA_LABEL[c.id];
+      if (!criteria) return null;
+      return {
+        criteria,
+        rating: c.selfRating,
+        aemg_manager_rating: c.managerRating,
+        aemg_mid_year_rating: c.midYearRating,
+        aemg_mid_year_comment: c.midYearComment,
+      };
+    })
+    .filter((r): r is NonNullable<typeof r> => r != null);
+
+  const { aemg_kpi_status, aemg_mid_year_status } = erpKpiAndMidYearStatus(
+    fields.midYearStatus
+  );
+
+  const result = await erpnextMethodCall<{ name: string }>("hr_override_appraisal", {
+    appraisal,
+    data: {
+      goals,
+      capabilities,
+      aemg_kpi_status,
+      aemg_mid_year_status,
+      aemg_mid_year_manager_comments: fields.midYearManagerComments,
+      aemg_manager_overall_override: fields.managerOverallOverride,
+      reflections: fields.employeeComments,
+      remarks: fields.managerComments,
+    },
+  });
+  const ok = result?.name === appraisal;
+  if (ok) {
+    console.log(`[erpnext] mirrored HR override for ${ownerUserId} -> ${appraisal}`);
   }
   return ok;
 }

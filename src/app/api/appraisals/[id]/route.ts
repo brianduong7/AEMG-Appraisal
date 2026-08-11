@@ -11,6 +11,7 @@ import {
   mirrorMidYearCompleteToErpnext,
   mirrorAnnualManagerSubmitToErpnext,
   mirrorAppraisalCompleteToErpnext,
+  mirrorHrUpdateToErpnext,
 } from "@/lib/erpnext";
 import type {
   Appraisal,
@@ -885,6 +886,19 @@ export async function PATCH(
     if (!next) {
       return NextResponse.json({ error: "Appraisal not found" }, { status: 404 });
     }
+    // Sixth ERPNext wiring slice: mirror HR's admin override via the
+    // dedicated hr_override_appraisal endpoint (see erpnext.ts). HR-side,
+    // safely callable under the shared service account. Best-effort, never
+    // blocks the local response.
+    await mirrorHrUpdateToErpnext(next.ownerUserId, {
+      kpis: next.kpis,
+      capabilities: next.capabilities,
+      employeeComments: next.employeeComments,
+      managerComments: next.managerComments,
+      midYearManagerComments: next.midYearManagerComments,
+      midYearStatus: next.midYearStatus,
+      managerOverallOverride: next.managerOverallOverride,
+    });
     return NextResponse.json(next);
   }
 
