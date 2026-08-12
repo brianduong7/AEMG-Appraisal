@@ -16,6 +16,7 @@ import {
   addReviewPendingNotification,
   removeNotificationsForAppraisal,
 } from "./notification-store";
+import { mirrorAppraisalCreateToErpnext } from "./erpnext";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const DATA_FILE = path.join(DATA_DIR, "appraisals.json");
@@ -266,7 +267,17 @@ export async function createAppraisal(ownerUserId: string): Promise<Appraisal> {
     await writeAppraisals(next);
   }
   const finalList = changed ? next : withNew;
-  return finalList.find((a) => a.id === id) ?? appraisal;
+  const result = finalList.find((a) => a.id === id) ?? appraisal;
+
+  // First real ERPNext wiring slice: mirror the create into ERPNext (dev
+  // site) so we can prove the connection actually works end to end. Runs
+  // after the local write succeeds; awaited (rather than fire-and-forget)
+  // so it reliably completes before the request ends, but a failure here
+  // still never breaks the local demo flow - see erpnext.ts's module
+  // docstring for what this does and does not cover yet.
+  await mirrorAppraisalCreateToErpnext(ownerUserId);
+
+  return result;
 }
 
 function clampOptionalRating(n: unknown): number | null {

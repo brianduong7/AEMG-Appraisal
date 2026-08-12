@@ -6,6 +6,16 @@ import {
   removeNotificationsForAppraisal,
 } from "@/lib/notification-store";
 import { getReviewWindows } from "@/lib/settings-store";
+import {
+  mirrorKpiApproveToErpnext,
+  mirrorMidYearCompleteToErpnext,
+  mirrorAnnualManagerSubmitToErpnext,
+  mirrorAppraisalCompleteToErpnext,
+  mirrorHrUpdateToErpnext,
+  mirrorKpiSubmitToErpnext,
+  mirrorMidYearEmployeeSubmitToErpnext,
+  mirrorAnnualSelfSubmitToErpnext,
+} from "@/lib/erpnext";
 import type {
   Appraisal,
   AppraisalStatus,
@@ -381,6 +391,11 @@ export async function PATCH(
           employeeName: next.employeeName,
         });
       }
+      // First employee-side ERPNext wiring slice: mirror the employee's
+      // KPI submission. Authenticates as the employee's own ERPNext
+      // credentials, not the shared service account - see erpnext.ts's
+      // module docstring. Best-effort, never blocks the local response.
+      await mirrorKpiSubmitToErpnext(next.ownerUserId, next.kpis);
     }
     return NextResponse.json(next);
   }
@@ -409,6 +424,12 @@ export async function PATCH(
       );
     }
     await removeNotificationsForAppraisal(id);
+    // Second ERPNext wiring slice: mirror the manager's KPI approval.
+    // Manager/HR-side action, safely callable under the shared service
+    // account (see erpnext.ts's module docstring) - unlike the employee-
+    // side actions above, which still aren't wired. Best-effort, never
+    // blocks the local response.
+    await mirrorKpiApproveToErpnext(next.ownerUserId);
     return NextResponse.json(next);
   }
 
@@ -477,6 +498,14 @@ export async function PATCH(
         },
         { status: 409 }
       );
+    }
+    // Second employee-side ERPNext wiring slice: mirror the employee's
+    // mid-year submit. Authenticates as the employee's own ERPNext
+    // credentials - see erpnext.ts's module docstring. Only fires on the
+    // actual finalize, not employee_midyear_save (draft-only, no ERPNext
+    // equivalent, same convention as the manager-side mirrors).
+    if (action === "employee_midyear_submit") {
+      await mirrorMidYearEmployeeSubmitToErpnext(next.ownerUserId, next.kpis);
     }
     return NextResponse.json(next);
   }
@@ -553,6 +582,11 @@ export async function PATCH(
         managerUserId: next.reviewingManagerId ?? DEMO_MANAGER.id,
         employeeName: next.employeeName,
       });
+      // Third employee-side ERPNext wiring slice: mirror the employee's
+      // annual self-review submit. Authenticates as the employee's own
+      // ERPNext credentials - see erpnext.ts's module docstring.
+      // Best-effort, never blocks the local response.
+      await mirrorAnnualSelfSubmitToErpnext(next.ownerUserId, next.kpis, next.capabilities);
     }
     return NextResponse.json(next);
   }
@@ -661,6 +695,11 @@ export async function PATCH(
       );
     }
     await removeNotificationsForAppraisal(id);
+    // Fourth ERPNext wiring slice: mirror the manager's annual review
+    // submit. Manager/HR-side, safely callable under the shared service
+    // account (see erpnext.ts's module docstring). Best-effort, never
+    // blocks the local response.
+    await mirrorAnnualManagerSubmitToErpnext(next.ownerUserId, next.kpis, next.capabilities);
     return NextResponse.json(next);
   }
 
@@ -684,6 +723,11 @@ export async function PATCH(
         { status: 409 }
       );
     }
+    // Fifth ERPNext wiring slice: mirror the manager's final sign-off.
+    // Manager/HR-side, safely callable under the shared service account
+    // (see erpnext.ts's module docstring). Best-effort, never blocks the
+    // local response.
+    await mirrorAppraisalCompleteToErpnext(next.ownerUserId, next.managerOverallOverride);
     return NextResponse.json(next);
   }
 
@@ -784,6 +828,15 @@ export async function PATCH(
         { status: 409 }
       );
     }
+    // Third ERPNext wiring slice: mirror the manager's mid-year completion.
+    // Manager/HR-side action, safely callable under the shared service
+    // account (see erpnext.ts's module docstring). Only fires on the actual
+    // finalize (manager_midyear_submit) - manager_midyear_save is a draft
+    // write with no ERPNext equivalent (complete_mid_year always finalizes).
+    // Best-effort, never blocks the local response.
+    if (action === "manager_midyear_submit") {
+      await mirrorMidYearCompleteToErpnext(next.ownerUserId, midYearManagerComments);
+    }
     return NextResponse.json(next);
   }
 
@@ -854,6 +907,19 @@ export async function PATCH(
     if (!next) {
       return NextResponse.json({ error: "Appraisal not found" }, { status: 404 });
     }
+    // Sixth ERPNext wiring slice: mirror HR's admin override via the
+    // dedicated hr_override_appraisal endpoint (see erpnext.ts). HR-side,
+    // safely callable under the shared service account. Best-effort, never
+    // blocks the local response.
+    await mirrorHrUpdateToErpnext(next.ownerUserId, {
+      kpis: next.kpis,
+      capabilities: next.capabilities,
+      employeeComments: next.employeeComments,
+      managerComments: next.managerComments,
+      midYearManagerComments: next.midYearManagerComments,
+      midYearStatus: next.midYearStatus,
+      managerOverallOverride: next.managerOverallOverride,
+    });
     return NextResponse.json(next);
   }
 
