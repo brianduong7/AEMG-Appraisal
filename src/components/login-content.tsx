@@ -1,11 +1,29 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { useSearchParams } from "next/navigation";
+import { signIn } from "next-auth/react";
 import { DEMO_HR, DEMO_MANAGER, findMockUser } from "@/lib/mock-users";
 import { AppLogo } from "@/components/app-logo";
 import { useSession } from "@/contexts/session-context";
 
 const EMMA_ID = "emma" as const;
+
+/**
+ * Why sign-in failed, in words a person can act on. `no-employee-record` is
+ * ours (see auth.ts); the rest are Auth.js's own error codes. Anything
+ * unrecognised falls back to a generic line rather than showing a raw code.
+ */
+function ssoErrorMessage(code: string | null): string | null {
+  if (!code) return null;
+  if (code === "no-employee-record") {
+    return "Your Microsoft sign-in worked, but there is no employee record matching that address in the HR system. Contact HR to have your record set up or your work email corrected.";
+  }
+  if (code === "AccessDenied") {
+    return "Access denied. Your account is not permitted to sign in to this portal.";
+  }
+  return "Sign-in could not be completed. Please try again, or contact IT if it keeps happening.";
+}
 
 /** Shown in the demo box and accepted on Login (password ignored for demo). */
 const DEMO_EMPLOYEE_EMAIL = "emma@aemg.demo";
@@ -63,6 +81,7 @@ function LockIcon({ className }: { className?: string }) {
 export function LoginContent() {
   const { loginEmployee, loginManager, loginHr } = useSession();
   const emma = findMockUser(EMMA_ID);
+  const ssoError = ssoErrorMessage(useSearchParams().get("error"));
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -215,6 +234,41 @@ export function LoginContent() {
                   Sign in
                 </button>
               </form>
+
+              <div className="my-5 flex items-center gap-3">
+                <div className="h-px flex-1 bg-slate-200" aria-hidden />
+                <span className="shrink-0 text-xs text-slate-400">or</span>
+                <div className="h-px flex-1 bg-slate-200" aria-hidden />
+              </div>
+
+              {/*
+                Uses Auth.js's signIn() rather than posting to the sign-in
+                URL directly: that endpoint requires a CSRF token in the body
+                and rejects a bare form post with MissingCSRF. signIn()
+                fetches and includes it.
+              */}
+              <button
+                type="button"
+                onClick={() => void signIn("microsoft-entra-id")}
+                className="flex w-full items-center justify-center gap-2.5 rounded-xl border border-slate-300 bg-white py-3 text-sm font-semibold text-slate-800 transition hover:bg-slate-50"
+              >
+                <svg className="h-4 w-4 shrink-0" viewBox="0 0 23 23" aria-hidden>
+                  <path fill="#f35325" d="M1 1h10v10H1z" />
+                  <path fill="#81bc06" d="M12 1h10v10H12z" />
+                  <path fill="#05a6f0" d="M1 12h10v10H1z" />
+                  <path fill="#ffba08" d="M12 12h10v10H12z" />
+                </svg>
+                Sign in with Microsoft
+              </button>
+
+              {ssoError && (
+                <p
+                  className="mt-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-xs text-amber-900"
+                  role="alert"
+                >
+                  {ssoError}
+                </p>
+              )}
 
               <div className="my-5 flex items-center gap-3">
                 <div className="h-px flex-1 bg-slate-200" aria-hidden />
