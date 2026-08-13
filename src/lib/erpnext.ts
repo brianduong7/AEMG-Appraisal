@@ -4,33 +4,29 @@
  * a time. See erpnext-integration-status memory / project docs for the
  * running list of what's wired vs still local-only.
  *
- * There is still no real per-user login on either side - the Next.js app's
- * "logged in" user is one of four fixed demo logins (emma/mark/john/hr).
- * What changed in this slice is WHICH ERPNext identity each mirror call
- * authenticates as, because ERPNext's own endpoints split cleanly into two
- * groups by what they gate on:
+ * WHICH ERPNext IDENTITY EACH CALL USES, and why it varies. ERPNext's own
+ * endpoints split cleanly into two groups by what they gate on:
  *
  *   - Manager/HR-side endpoints (`approve_kpis`, `complete_mid_year`,
  *     `submit_annual_manager`, `complete_appraisal`, `hr_override_appraisal`,
  *     ...) gate on `_require_manager` / HR-only, which the shared
  *     `epm-integration@aemg.demo` service account satisfies (it holds HR
- *     Manager/HR User/System Manager roles) - these keep using that one
- *     shared account, via `erpnextAuthHeader()`.
+ *     Manager/HR User/System Manager roles) - these use that one shared
+ *     account, via `erpnextAuthHeader()`.
  *   - Employee-side endpoints (`update_kpis`, `submit_kpis`,
  *     `update_mid_year_ratings`, `submit_annual_self`,
- *     `update_capability_self_ratings`, ...) gate on `_require_self`
- *     (`doc.employee != current_employee(session user)`), which has NO HR
- *     bypass - epm-integration can never pass it for someone else's
- *     appraisal. These now authenticate as that demo user's OWN ERPNext
- *     credentials instead, via `ownerAuthHeader(ownerUserId)` - each of the
- *     four demo Users on aemg-dev.local already had a linked Employee
- *     record (from dev_seed.py) and the plain "Employee" role; they just
- *     needed their own api_key/api_secret generated, which now live in
- *     `.env.local` as `ERPNEXT_API_KEY_<NAME>` / `ERPNEXT_API_SECRET_<NAME>`.
- *     This is still not real login - it's real ERPNext identity bolted onto
- *     the existing fixed demo-login list. A future real-login flow would
- *     replace `ownerAuthHeader`'s fixed lookup with something derived from
- *     the actual signed-in user, not the four hardcoded demo credentials.
+ *     `update_capability_self_ratings`, ...) gate on `_require_self`, which
+ *     has NO HR bypass - the shared account can never pass it for someone
+ *     else's appraisal. These go through `actingAs(ownerUserId)`, which
+ *     picks one of two mechanisms depending on who the user is; see that
+ *     function for the reasoning.
+ *
+ * The app now has real Microsoft Entra sign-in (see auth.ts) running
+ * alongside the four legacy demo logins, so both populations exist at once
+ * and `actingAs` is what reconciles them. Note the two are NOT equivalent
+ * in strength: a demo login authenticates to ERPNext as itself, whereas an
+ * SSO user is asserted by this server. That asymmetry is deliberate and
+ * documented on the add-on's `_acting_employee`.
  *
  * All mirror calls are best-effort: logged, never thrown, and never allowed
  * to block or break the local JSON-store demo flow if ERPNext is
@@ -171,7 +167,8 @@ export type ErpnextResult<T> =
 export async function erpnextApiCall<T = Record<string, unknown>>(
   dottedMethod: string,
   payload: Record<string, unknown>,
-  authHeader: string = erpnextAuthHeader()
+  authHeader: string = erpnextAuthHeader(),
+  onBehalfOf?: string
 ): Promise<ErpnextResult<T>> {
   if (!erpnextConfigured()) {
     return { ok: false, error: "ERPNext is not configured." };
@@ -184,6 +181,9 @@ export async function erpnextApiCall<T = Record<string, unknown>>(
         headers: {
           "Content-Type": "application/json",
           Authorization: authHeader,
+          // Only meaningful alongside the shared service account; the add-on
+          // rejects it outright from any other caller.
+          ...(onBehalfOf ? { "X-AEMG-On-Behalf-Of": onBehalfOf } : {}),
         },
         body: JSON.stringify(payload),
         // Do not let a slow/unreachable dev server hang the local action.
@@ -235,10 +235,46 @@ function erpnextExceptionMessage(exception: string | undefined): string | null {
 async function erpnextMethodCall<T = Record<string, unknown>>(
   method: string,
   payload: Record<string, unknown>,
-  authHeader: string = erpnextAuthHeader()
+  acting: ActingAs = { authHeader: erpnextAuthHeader() }
 ): Promise<T | null> {
-  const result = await erpnextApiCall<T>(`appraisal.${method}`, payload, authHeader);
+  const result = await erpnextApiCall<T>(
+    `appraisal.${method}`,
+    payload,
+    acting.authHeader,
+    acting.onBehalfOf
+  );
   return result.ok ? result.data : null;
+}
+
+/** How to authenticate a call made *as* a particular person. */
+type ActingAs = { authHeader: string; onBehalfOf?: string };
+
+/**
+ * Work out how to speak to ERPNext as `ownerUserId` for the employee-self
+ * endpoints, which gate on `_require_self` and so cannot use the shared
+ * account plainly.
+ *
+ * Two populations, two mechanisms:
+ *
+ *   - The four demo logins have their own ERPNext API credentials, so they
+ *     authenticate as themselves directly. Kept because it is the stronger
+ *     option where it is available - ERPNext sees the real user, not an
+ *     assertion about them.
+ *   - A Microsoft-authenticated user has no ERPNext credentials at all, and
+ *     minting one per person does not scale. They go through the shared
+ *     service account plus an on-behalf-of assertion, which the add-on
+ *     accepts only from that account.
+ *
+ * Returns null when the owner maps to no ERPNext employee at all, which the
+ * caller should treat as "cannot mirror this".
+ */
+function actingAs(ownerUserId: string): ActingAs | null {
+  const own = ownerAuthHeader(ownerUserId);
+  if (own) return { authHeader: own };
+
+  const employee = erpnextEmployeeIdForOwner(ownerUserId);
+  if (!employee) return null;
+  return { authHeader: erpnextAuthHeader(), onBehalfOf: employee };
 }
 
 /**
@@ -530,8 +566,8 @@ export async function mirrorKpiSubmitToErpnext(
   ownerUserId: string,
   kpis: { goalsAndKpis: string; weightPercent: number; dueDate: string }[]
 ): Promise<boolean> {
-  const auth = ownerAuthHeader(ownerUserId);
-  if (!auth) return false;
+  const acting = actingAs(ownerUserId);
+  if (!acting) return false;
   const appraisal = await findErpnextAppraisalName(ownerUserId);
   if (!appraisal) return false;
 
@@ -540,12 +576,12 @@ export async function mirrorKpiSubmitToErpnext(
     per_weightage: k.weightPercent,
     aemg_due_date: k.dueDate || null,
   }));
-  await erpnextMethodCall("update_kpis", { appraisal, goals }, auth);
+  await erpnextMethodCall("update_kpis", { appraisal, goals }, acting);
 
   const result = await erpnextMethodCall<{ aemg_kpi_status: string }>(
     "submit_kpis",
     { appraisal },
-    auth
+    acting
   );
   const ok = result?.aemg_kpi_status === "KPI Created";
   if (ok) {
@@ -569,8 +605,8 @@ export async function mirrorMidYearEmployeeSubmitToErpnext(
   ownerUserId: string,
   kpis: { midYearRating: string | null }[]
 ): Promise<boolean> {
-  const auth = ownerAuthHeader(ownerUserId);
-  if (!auth) return false;
+  const acting = actingAs(ownerUserId);
+  if (!acting) return false;
   const appraisal = await findErpnextAppraisalName(ownerUserId);
   if (!appraisal) return false;
 
@@ -578,12 +614,12 @@ export async function mirrorMidYearEmployeeSubmitToErpnext(
     idx: i + 1,
     aemg_mid_year_rating: erpMidYearRating(k.midYearRating),
   }));
-  await erpnextMethodCall("update_mid_year_ratings", { appraisal, ratings }, auth);
+  await erpnextMethodCall("update_mid_year_ratings", { appraisal, ratings }, acting);
 
   const result = await erpnextMethodCall<{ aemg_mid_year_status: string }>(
     "submit_mid_year_employee",
     { appraisal },
-    auth
+    acting
   );
   const ok = result?.aemg_mid_year_status === "Submitted";
   if (ok) {
@@ -606,8 +642,8 @@ export async function mirrorAnnualSelfSubmitToErpnext(
   kpis: { selfRating: number | null }[],
   capabilities: { id: string; selfRating: number | null }[]
 ): Promise<boolean> {
-  const auth = ownerAuthHeader(ownerUserId);
-  if (!auth) return false;
+  const acting = actingAs(ownerUserId);
+  if (!acting) return false;
   const appraisal = await findErpnextAppraisalName(ownerUserId);
   if (!appraisal) return false;
 
@@ -615,7 +651,7 @@ export async function mirrorAnnualSelfSubmitToErpnext(
   await erpnextMethodCall(
     "update_annual_self_ratings",
     { appraisal, ratings: goalRatings },
-    auth
+    acting
   );
 
   const capRatings = capabilities
@@ -628,14 +664,14 @@ export async function mirrorAnnualSelfSubmitToErpnext(
     await erpnextMethodCall(
       "update_capability_self_ratings",
       { appraisal, ratings: capRatings },
-      auth
+      acting
     );
   }
 
   const result = await erpnextMethodCall<{ aemg_annual_status: string }>(
     "submit_annual_self",
     { appraisal },
-    auth
+    acting
   );
   const ok = result?.aemg_annual_status === "Submitted";
   if (ok) {
