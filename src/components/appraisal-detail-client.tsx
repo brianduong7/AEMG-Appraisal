@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
 import type {
   Appraisal,
   AppraisalStatus,
@@ -24,6 +24,7 @@ import { cloneAppraisal } from "@/lib/clone-appraisal";
 import {
   DEMO_COMPANY_NAME,
   DEMO_HR,
+  DEMO_MANAGER,
   DEMO_SKIP_LEVEL_MANAGER,
   currentManagerNameForOwner,
   employmentProfileFromUser,
@@ -59,7 +60,7 @@ import {
   readAppraisalBootstrap,
   saveAppraisalBootstrap,
 } from "@/lib/appraisal-bootstrap";
-import { DEMO_BRANCH_MANAGER_COMMENTS } from "@/lib/branch-manager-comments-demo";
+import type { FeedbackRequest } from "@/lib/erpnext-feedback";
 import { formatDueDateDisplay } from "@/lib/format-date";
 
 function emptyKpi(): KpiRow {
@@ -1973,7 +1974,12 @@ function AppraisalDetailInner({
               )}
 
               {(isManager || isHr) && appraisal.status !== "draft" && (
-                <FeedbackSection />
+                <FeedbackSection
+                  appraisalId={appraisal.id}
+                  requestedByName={
+                    isHr ? DEMO_HR.displayName : DEMO_MANAGER.displayName
+                  }
+                />
               )}
               </>
               )}
@@ -2607,20 +2613,132 @@ function AppraisalDetailInner({
   );
 }
 
+/** ERPNext datetimes arrive as "YYYY-MM-DD HH:MM:SS.ffffff" — show the date. */
+function feedbackDate(raw: string | null): string {
+  return (raw ?? "").slice(0, 10);
+}
+
 /**
  * Feedback from authorised reviewers (Branch Manager / Team Leader / Manager).
- * Visible to the direct manager and HR only — never to the employee.
+ * Visible to the direct manager and HR only — never to the employee; the
+ * caller gates rendering on that, and the ERPNext add-on enforces it again
+ * server-side (see api/feedback.py).
+ *
+ * Unlike the rest of this screen, these rows live only in ERPNext — there
+ * is no local JSON copy — so a load failure is shown rather than silently
+ * rendering an empty list, which would read as "nobody has commented".
+ * Requests load lazily on first expand: the panel is collapsed by default
+ * and most views never open it, so fetching upfront would add an ERPNext
+ * round trip to every appraisal page load for nothing.
  */
-function FeedbackSection() {
+function FeedbackSection({
+  appraisalId,
+  requestedByName,
+}: {
+  appraisalId: string;
+  requestedByName: string;
+}) {
   const [open, setOpen] = useState(false);
-  const count = DEMO_BRANCH_MANAGER_COMMENTS.length;
-  const preview = DEMO_BRANCH_MANAGER_COMMENTS[0];
+  const [requests, setRequests] = useState<FeedbackRequest[] | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+
+  const [formOpen, setFormOpen] = useState(false);
+  const [reviewerName, setReviewerName] = useState("");
+  const [reviewerRole, setReviewerRole] = useState("");
+  const [reviewerBranch, setReviewerBranch] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+  const [newLink, setNewLink] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setLoadError(null);
+    try {
+      const res = await fetch(`/api/appraisals/${appraisalId}/feedback`);
+      const data = (await res.json()) as FeedbackRequest[] | { error?: string };
+      if (!res.ok) {
+        setLoadError(
+          (!Array.isArray(data) && data.error) || "Could not load feedback."
+        );
+        return;
+      }
+      setRequests(data as FeedbackRequest[]);
+    } catch {
+      setLoadError("Could not load feedback.");
+    } finally {
+      setLoading(false);
+    }
+  }, [appraisalId]);
+
+  function toggle() {
+    const next = !open;
+    setOpen(next);
+    if (next && requests === null && !loading) void load();
+  }
+
+  async function handleCreate(e: FormEvent) {
+    e.preventDefault();
+    if (!reviewerName.trim() || creating) return;
+    setCreating(true);
+    setCreateError(null);
+    setNewLink(null);
+    setCopied(false);
+    try {
+      const res = await fetch(`/api/appraisals/${appraisalId}/feedback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          reviewerName,
+          reviewerRole,
+          reviewerBranch,
+          requestedByName,
+        }),
+      });
+      const data = (await res.json()) as { token?: string; error?: string };
+      if (!res.ok || !data.token) {
+        setCreateError(data.error ?? "Could not create the feedback link.");
+        return;
+      }
+      setNewLink(`${window.location.origin}/feedback/${data.token}`);
+      setReviewerName("");
+      setReviewerRole("");
+      setReviewerBranch("");
+      setFormOpen(false);
+      await load();
+    } catch {
+      setCreateError("Could not create the feedback link.");
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  async function handleDelete(name: string) {
+    try {
+      const res = await fetch(
+        `/api/appraisals/${appraisalId}/feedback?name=${encodeURIComponent(name)}`,
+        { method: "DELETE" }
+      );
+      if (!res.ok) {
+        const data = (await res.json()) as { error?: string };
+        setLoadError(data.error ?? "Could not withdraw that request.");
+        return;
+      }
+      await load();
+    } catch {
+      setLoadError("Could not withdraw that request.");
+    }
+  }
+
+  const count = requests?.length ?? 0;
+  const answered = requests?.filter((r) => r.status === "Submitted").length ?? 0;
 
   return (
     <section className="mt-5 overflow-hidden rounded-xl border border-slate-200 bg-white">
       <button
         type="button"
-        onClick={() => setOpen((v) => !v)}
+        onClick={toggle}
         aria-expanded={open}
         className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-navy-50/40"
       >
@@ -2631,17 +2749,13 @@ function FeedbackSection() {
               Visible to direct manager &amp; HR only
             </span>
           </p>
-          {!open && preview ? (
-            <p className="mt-0.5 truncate text-xs text-slate-500">
-              {count} note{count === 1 ? "" : "s"} — {preview.branch}:{" "}
-              {preview.comment}
-            </p>
-          ) : (
-            <p className="mt-0.5 text-xs text-slate-500">
-              {count} note{count === 1 ? "" : "s"} from authorised reviewers
-              (demo data)
-            </p>
-          )}
+          <p className="mt-0.5 text-xs text-slate-500">
+            {requests === null
+              ? "Request comments from branch managers and other reviewers"
+              : count === 0
+                ? "No feedback requested yet"
+                : `${answered} of ${count} request${count === 1 ? "" : "s"} answered`}
+          </p>
         </div>
         <svg
           className={`h-4 w-4 shrink-0 text-slate-400 transition-transform ${open ? "rotate-180" : ""}`}
@@ -2654,33 +2768,203 @@ function FeedbackSection() {
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
         </svg>
       </button>
+
       {open && (
-        <ul className="space-y-3 border-t border-slate-100 px-4 py-4">
-          {DEMO_BRANCH_MANAGER_COMMENTS.map((item) => (
-            <li
-              key={item.id}
-              className="rounded-lg border border-slate-100 bg-slate-50/80 px-3.5 py-3"
-            >
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <p className="text-sm font-medium text-navy-950">
-                  {item.branch}
-                </p>
-                <time
-                  className="text-xs text-slate-500"
-                  dateTime={item.recordedAt}
+        <div className="border-t border-slate-100 px-4 py-4">
+          {newLink && (
+            <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-3.5 py-3">
+              <p className="text-sm font-medium text-emerald-950">
+                Feedback link created
+              </p>
+              <p className="mt-1 text-xs text-emerald-900">
+                Send this link to the reviewer. It works without a login, can
+                be used once, and stays valid until you withdraw the request.
+              </p>
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <code className="min-w-0 flex-1 truncate rounded border border-emerald-200 bg-white px-2 py-1.5 text-xs text-emerald-950">
+                  {newLink}
+                </code>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await navigator.clipboard.writeText(newLink);
+                    setCopied(true);
+                  }}
+                  className="rounded-md border border-emerald-300 bg-white px-2.5 py-1.5 text-xs font-medium text-emerald-900 hover:bg-emerald-100"
                 >
-                  {item.recordedAt}
-                </time>
+                  {copied ? "Copied" : "Copy"}
+                </button>
               </div>
-              <p className="mt-0.5 text-xs text-slate-500">
-                {item.managerName} · {item.role}
+            </div>
+          )}
+
+          {formOpen ? (
+            <form
+              onSubmit={handleCreate}
+              className="mb-4 rounded-lg border border-slate-200 bg-slate-50/80 px-3.5 py-3"
+            >
+              <p className="text-sm font-medium text-navy-950">
+                Request feedback
               </p>
-              <p className="mt-2 text-sm leading-relaxed text-navy-950/90">
-                {item.comment}
-              </p>
-            </li>
-          ))}
-        </ul>
+              <div className="mt-3 grid gap-3 sm:grid-cols-3">
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-slate-600">
+                    Reviewer name <span className="text-red-500">*</span>
+                  </span>
+                  <input
+                    required
+                    value={reviewerName}
+                    onChange={(e) => setReviewerName(e.target.value)}
+                    placeholder="Sarah Chen"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-950 outline-none focus:border-slate-400"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-slate-600">
+                    Role
+                  </span>
+                  <input
+                    value={reviewerRole}
+                    onChange={(e) => setReviewerRole(e.target.value)}
+                    placeholder="Branch Manager"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-950 outline-none focus:border-slate-400"
+                  />
+                </label>
+                <label className="block">
+                  <span className="mb-1 block text-xs font-medium text-slate-600">
+                    Branch
+                  </span>
+                  <input
+                    value={reviewerBranch}
+                    onChange={(e) => setReviewerBranch(e.target.value)}
+                    placeholder="AFE — Melbourne"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-950 outline-none focus:border-slate-400"
+                  />
+                </label>
+              </div>
+              {createError && (
+                <p
+                  className="mt-3 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-800"
+                  role="alert"
+                >
+                  {createError}
+                </p>
+              )}
+              <div className="mt-3 flex items-center gap-2">
+                <button
+                  type="submit"
+                  disabled={creating || !reviewerName.trim()}
+                  className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-medium text-white hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {creating ? "Creating…" : "Create link"}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setFormOpen(false);
+                    setCreateError(null);
+                  }}
+                  className="text-sm font-medium text-slate-600 hover:text-navy-950"
+                >
+                  Cancel
+                </button>
+              </div>
+            </form>
+          ) : (
+            <button
+              type="button"
+              onClick={() => {
+                setFormOpen(true);
+                setNewLink(null);
+              }}
+              className="mb-4 rounded-lg border border-navy-200 bg-white px-3.5 py-2 text-sm font-medium text-navy-900 hover:bg-navy-50"
+            >
+              + Request feedback
+            </button>
+          )}
+
+          {loadError && (
+            <p
+              className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800"
+              role="alert"
+            >
+              {loadError}
+            </p>
+          )}
+
+          {loading && !requests && (
+            <p className="text-sm text-slate-500" role="status">
+              Loading feedback…
+            </p>
+          )}
+
+          {requests && requests.length === 0 && !loadError && (
+            <p className="text-sm text-slate-500">
+              No feedback has been requested for this appraisal yet.
+            </p>
+          )}
+
+          {requests && requests.length > 0 && (
+            <ul className="space-y-3">
+              {requests.map((item) => (
+                <li
+                  key={item.name}
+                  className="rounded-lg border border-slate-100 bg-slate-50/80 px-3.5 py-3"
+                >
+                  <div className="flex flex-wrap items-baseline justify-between gap-2">
+                    <p className="text-sm font-medium text-navy-950">
+                      {item.reviewerBranch || item.reviewerName}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <span
+                        className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${
+                          item.status === "Submitted"
+                            ? "bg-emerald-50 text-emerald-800"
+                            : "bg-amber-50 text-amber-800"
+                        }`}
+                      >
+                        {item.status === "Submitted" ? "Answered" : "Awaiting reply"}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => void handleDelete(item.name)}
+                        className="text-xs font-medium text-slate-500 underline underline-offset-2 hover:text-red-700"
+                      >
+                        Withdraw
+                      </button>
+                    </div>
+                  </div>
+                  <p className="mt-0.5 text-xs text-slate-500">
+                    {item.reviewerName}
+                    {item.reviewerRole ? ` · ${item.reviewerRole}` : ""}
+                    {item.requestedByName
+                      ? ` — requested by ${item.requestedByName}`
+                      : ""}
+                  </p>
+                  {item.status === "Submitted" ? (
+                    <>
+                      <p className="mt-2 text-sm leading-relaxed text-navy-950/90">
+                        {item.comment}
+                      </p>
+                      {item.submittedOn && (
+                        <time
+                          className="mt-1 block text-xs text-slate-500"
+                          dateTime={item.submittedOn}
+                        >
+                          Answered {feedbackDate(item.submittedOn)}
+                        </time>
+                      )}
+                    </>
+                  ) : (
+                    <p className="mt-2 text-sm text-slate-500">
+                      Requested {feedbackDate(item.createdAt)} — no reply yet.
+                    </p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       )}
     </section>
   );

@@ -142,11 +142,20 @@ function ownerAuthHeader(ownerUserId: string): string | null {
   return `token ${key}:${secret}`;
 }
 
+export type ErpnextResult<T> =
+  | { ok: true; data: T }
+  | { ok: false; error: string };
+
 /**
- * POST to a whitelisted `aemg_epm_frappe.api.appraisal.*` method. Never
- * throws - returns null on any failure (network, timeout, non-2xx, or an
- * ERPNext-side frappe.throw), after logging the reason. Callers just check
- * for null.
+ * POST to any whitelisted `aemg_epm_frappe.api.*` method, by its dotted
+ * path below that prefix (e.g. "appraisal.approve_kpis",
+ * "feedback.create_feedback_request").
+ *
+ * Never throws. Returns a result rather than null so callers that have no
+ * local fallback - the feedback feature in erpnext-feedback.ts, where
+ * ERPNext is the only store - can show the real reason instead of failing
+ * silently. The mirror functions in this file don't need that and use the
+ * thinner `erpnextMethodCall` wrapper below.
  *
  * `authHeader` picks which identity this call authenticates as:
  * `erpnextAuthHeader()` (the shared epm-integration account, for
@@ -154,15 +163,17 @@ function ownerAuthHeader(ownerUserId: string): string | null {
  * employee's own credentials, required for `_require_self`-gated
  * endpoints) - see module docstring.
  */
-async function erpnextMethodCall<T = Record<string, unknown>>(
-  method: string,
+export async function erpnextApiCall<T = Record<string, unknown>>(
+  dottedMethod: string,
   payload: Record<string, unknown>,
   authHeader: string = erpnextAuthHeader()
-): Promise<T | null> {
-  if (!erpnextConfigured()) return null;
+): Promise<ErpnextResult<T>> {
+  if (!erpnextConfigured()) {
+    return { ok: false, error: "ERPNext is not configured." };
+  }
   try {
     const res = await fetch(
-      `${process.env.ERPNEXT_URL}/api/method/aemg_epm_frappe.api.appraisal.${method}`,
+      `${process.env.ERPNEXT_URL}/api/method/aemg_epm_frappe.api.${dottedMethod}`,
       {
         method: "POST",
         headers: {
@@ -170,8 +181,7 @@ async function erpnextMethodCall<T = Record<string, unknown>>(
           Authorization: authHeader,
         },
         body: JSON.stringify(payload),
-        // Best-effort only - do not let a slow/unreachable dev server hang
-        // the local action this is mirroring.
+        // Do not let a slow/unreachable dev server hang the local action.
         signal: AbortSignal.timeout(8000),
       }
     );
@@ -180,18 +190,50 @@ async function erpnextMethodCall<T = Record<string, unknown>>(
       exception?: string;
     };
     if (!res.ok || body.message == null) {
+      const error = erpnextExceptionMessage(body.exception) ?? `ERPNext returned ${res.status}.`;
       console.error(
-        `[erpnext] ${method} failed:`,
+        `[erpnext] ${dottedMethod} failed:`,
         res.status,
         body.exception ?? body
       );
-      return null;
+      return { ok: false, error };
     }
-    return body.message;
+    return { ok: true, data: body.message };
   } catch (e) {
-    console.error(`[erpnext] ${method} failed:`, e);
-    return null;
+    console.error(`[erpnext] ${dottedMethod} failed:`, e);
+    return { ok: false, error: "Could not reach ERPNext." };
   }
+}
+
+/**
+ * Frappe reports a `frappe.throw` as an exception string like
+ * "frappe.exceptions.ValidationError: Reviewer name is required." - the
+ * part after the last ": " is the human-readable message we raised
+ * server-side. Returns null when there's nothing useful to show, so the
+ * caller falls back to a generic message rather than surfacing a bare
+ * Python traceback class to a user.
+ */
+function erpnextExceptionMessage(exception: string | undefined): string | null {
+  if (!exception) return null;
+  const idx = exception.lastIndexOf(": ");
+  const message = idx === -1 ? exception : exception.slice(idx + 2);
+  const trimmed = message.trim();
+  return trimmed && !trimmed.includes("Traceback") ? trimmed : null;
+}
+
+/**
+ * Best-effort wrapper over `erpnextApiCall` for the appraisal mirrors in
+ * this file: null on any failure, reason already logged. Every mirror here
+ * is a side effect on top of a local write that already succeeded, so
+ * there is nothing useful for the caller to do with the error text.
+ */
+async function erpnextMethodCall<T = Record<string, unknown>>(
+  method: string,
+  payload: Record<string, unknown>,
+  authHeader: string = erpnextAuthHeader()
+): Promise<T | null> {
+  const result = await erpnextApiCall<T>(`appraisal.${method}`, payload, authHeader);
+  return result.ok ? result.data : null;
 }
 
 /**
@@ -222,7 +264,7 @@ export async function mirrorAppraisalCreateToErpnext(
  * Returns null if unconfigured, unmapped, unreachable, or genuinely not
  * found (e.g. the create-appraisal mirror failed or hasn't run yet).
  */
-async function findErpnextAppraisalName(ownerUserId: string): Promise<string | null> {
+export async function findErpnextAppraisalName(ownerUserId: string): Promise<string | null> {
   if (!erpnextConfigured()) return null;
   const employee = erpnextEmployeeIdForOwner(ownerUserId);
   if (!employee) return null;
