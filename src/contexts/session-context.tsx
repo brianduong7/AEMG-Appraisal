@@ -151,9 +151,39 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
         if (!cancelled) setReady(true);
         return;
       }
+
+      /**
+       * A failed Microsoft sign-in must NOT fall through to whatever demo
+       * account localStorage happens to remember.
+       *
+       * This is not hypothetical: signing in as a real user whose SSO
+       * callback failed silently landed them in the demo HR account, fully
+       * authenticated as somebody else, with no indication anything had
+       * gone wrong. Clearing here means they land back on the login screen
+       * with the actual error instead.
+       */
+      const hadAuthError = new URLSearchParams(window.location.search).has(
+        "error"
+      );
+      if (hadAuthError) {
+        clearDemoSession();
+        setReady(true);
+        return;
+      }
+
       restoreDemoSession();
       setReady(true);
     });
+
+    function clearDemoSession() {
+      try {
+        localStorage.removeItem(MODE_KEY);
+        localStorage.removeItem(USER_KEY);
+        localStorage.removeItem(MANAGER_ID_KEY);
+      } catch {
+        /* ignore */
+      }
+    }
 
     function restoreDemoSession() {
       try {
