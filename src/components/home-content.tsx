@@ -238,7 +238,10 @@ export function HomeContent() {
       : mode === "manager" && managerId
         ? managerId
         : mode === "hr"
-          ? DEMO_HR.id
+          ? // hrProfile.id is the demo HR key for a demo login, and the real
+            // ERPNext Employee id for an SSO user - so an HR user signed in
+            // with Microsoft creates their OWN appraisal, not the demo one's.
+            (hrProfile?.id ?? DEMO_HR.id)
           : null;
 
   const canCreateMyAppraisal = appraisalView === "my" && myOwnerId != null;

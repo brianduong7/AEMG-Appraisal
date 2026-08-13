@@ -11,6 +11,7 @@ import {
   employmentProfileFromUser,
   findMockUser,
   reviewingManagerIdForOwner,
+  type EmploymentProfile,
 } from "./mock-users";
 import {
   addReviewPendingNotification,
@@ -230,16 +231,32 @@ export async function writeAppraisals(appraisals: Appraisal[]): Promise<void> {
   await fs.writeFile(DATA_FILE, JSON.stringify(appraisals, null, 2), "utf-8");
 }
 
-/** Creates a draft appraisal for a demo employee (Emma / Mark / …). */
-export async function createAppraisal(ownerUserId: string): Promise<Appraisal> {
-  const user = findMockUser(ownerUserId);
-  if (!user) {
+/**
+ * Creates a draft appraisal.
+ *
+ * `owner` is supplied by the caller for anyone outside the demo roster - a
+ * Microsoft-authenticated user, whose employment details come from ERPNext
+ * rather than mock-users. The route resolves it from the signed-in session
+ * server-side; it is never taken from the request body, or a caller could
+ * mint an appraisal with whatever job title and manager they fancied.
+ *
+ * Without `owner` this behaves exactly as before, looking the four demo
+ * logins up in the roster.
+ */
+export async function createAppraisal(
+  ownerUserId: string,
+  owner?: { profile: EmploymentProfile; reviewingManagerId: string | null }
+): Promise<Appraisal> {
+  const user = owner ? null : findMockUser(ownerUserId);
+  if (!owner && !user) {
     throw new Error("Unknown employee");
   }
   const list = await readAppraisals();
   const id = randomUUID();
-  const profile = employmentProfileFromUser(user);
-  const reviewingManagerId = reviewingManagerIdForOwner(ownerUserId);
+  const profile = owner ? owner.profile : employmentProfileFromUser(user!);
+  const reviewingManagerId = owner
+    ? owner.reviewingManagerId
+    : reviewingManagerIdForOwner(ownerUserId);
   const raw = {
     id,
     ownerUserId,
