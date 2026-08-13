@@ -56,6 +56,11 @@ const ERPNEXT_EMPLOYEE_ID: Record<string, string> = {
 };
 
 export function erpnextEmployeeIdForOwner(ownerUserId: string): string | null {
+  // A Microsoft-authenticated user has no demo roster entry - their session
+  // id IS their ERPNext Employee id (see mockUserFromIdentity), so it needs
+  // no translation. The map above stays for the four demo logins, whose ids
+  // are names rather than doc ids.
+  if (/^HR-EMP-\d+$/.test(ownerUserId)) return ownerUserId;
   return ERPNEXT_EMPLOYEE_ID[ownerUserId] ?? null;
 }
 
