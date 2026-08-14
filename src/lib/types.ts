@@ -63,7 +63,12 @@ export function annualCycleStatus(
   return "completed";
 }
 
-/** HR-controlled windows: when false, that phase is locked for employees/managers. */
+/**
+ * HR-controlled windows: when false, that phase is locked for employees/managers.
+ * Also carries the org's current appraisal cycle - the year every new
+ * appraisal gets stamped with at creation, and the one HR advances via
+ * "Start next cycle" (see `startNewCycle` in settings-store.ts).
+ */
 export type ReviewWindowSettings = {
   /** Employee can submit KPIs (beginning of year). */
   kpiSubmissionOpen: boolean;
@@ -71,12 +76,15 @@ export type ReviewWindowSettings = {
   midYearReviewOpen: boolean;
   /** Annual self-ratings + manager annual ratings. */
   annualReviewOpen: boolean;
+  /** The year new appraisals are created under. HR-advanced only, never the wall clock. */
+  currentCycleYear: number;
 };
 
 export const DEFAULT_REVIEW_WINDOWS: ReviewWindowSettings = {
   kpiSubmissionOpen: true,
   midYearReviewOpen: false,
   annualReviewOpen: false,
+  currentCycleYear: new Date().getFullYear(),
 };
 
 /** Matches form column “Goals | KPIs”. */
@@ -118,6 +126,18 @@ export type CapabilityRow = {
 
 export type Appraisal = {
   id: string;
+  /**
+   * The appraisal cycle year this record belongs to - stamped at creation
+   * from the org's current cycle (`ReviewWindowSettings.currentCycleYear`),
+   * fixed for the life of the record. Legacy records created before this
+   * field existed default to the current year at migration time (see
+   * migrate-appraisal.ts) - a reasonable stand-in since there was no cycle
+   * distinction before. This is what scopes "one active appraisal" (see
+   * `hasOtherActiveAppraisal` in appraisal-store.ts) to a single cycle,
+   * rather than blocking a new cycle's submission because a prior cycle's
+   * appraisal is "completed" (non-draft, but not actually active anymore).
+   */
+  cycleYear: number;
   /** Links this appraisal to a demo login user (`MockUser.id`). */
   ownerUserId: string;
   /**

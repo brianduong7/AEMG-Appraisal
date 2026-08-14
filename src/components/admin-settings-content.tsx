@@ -7,6 +7,11 @@ import {
 } from "@/lib/types";
 import { viewSubtitle, viewTitle } from "@/lib/nav-roles";
 
+/** AEMG's cycle runs August -> August, not the calendar year - matches erpAppraisalCycleLabel in home-content.tsx/erpnext.ts. */
+function cycleSpanLabel(startYear: number): string {
+  return `${startYear}-${startYear + 1}`;
+}
+
 function WindowRow({
   label,
   description,
@@ -78,6 +83,34 @@ export function AdminSettingsPanel() {
     };
   }, []);
 
+  const [cycleBusy, setCycleBusy] = useState(false);
+  const [cycleConfirm, setCycleConfirm] = useState(false);
+
+  const startNextCycle = useCallback(async () => {
+    setCycleBusy(true);
+    setError(null);
+    try {
+      const res = await fetch("/api/settings", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ startNextCycle: true }),
+      });
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        setError(
+          typeof body?.error === "string" ? body.error : "Could not start the next cycle."
+        );
+        return;
+      }
+      setWindows(body as ReviewWindowSettings);
+      setCycleConfirm(false);
+    } catch {
+      setError("Network error.");
+    } finally {
+      setCycleBusy(false);
+    }
+  }, []);
+
   const patchWindow = useCallback(
     async (key: keyof ReviewWindowSettings, value: boolean) => {
       setBusy(true);
@@ -131,6 +164,59 @@ export function AdminSettingsPanel() {
 
       {loaded && (
         <>
+          <div className="border-b border-slate-100 bg-slate-50/60 px-5 py-3">
+            <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Appraisal cycle
+            </h3>
+            <p className="mt-0.5 text-xs text-slate-500">
+              New appraisals are created under this cycle. Existing appraisals keep
+              their own cycle - starting a new one never affects past records.
+            </p>
+          </div>
+          <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-5 py-4">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-navy-950">
+                Current cycle: {cycleSpanLabel(windows.currentCycleYear)}
+              </p>
+              <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
+                {cycleConfirm
+                  ? `Start the ${cycleSpanLabel(windows.currentCycleYear + 1)} cycle now? This can't be undone.`
+                  : `Advance to the ${cycleSpanLabel(windows.currentCycleYear + 1)} cycle when this year's appraisals are done.`}
+              </p>
+            </div>
+            {cycleConfirm ? (
+              <div className="flex shrink-0 items-center gap-2">
+                <button
+                  type="button"
+                  disabled={cycleBusy}
+                  onClick={() => setCycleConfirm(false)}
+                  className="rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-600 shadow-sm transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={cycleBusy}
+                  onClick={() => void startNextCycle()}
+                  className="rounded-lg bg-navy-900 px-3.5 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-50"
+                >
+                  {cycleBusy
+                    ? "Starting…"
+                    : `Confirm: start ${cycleSpanLabel(windows.currentCycleYear + 1)}`}
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={cycleBusy}
+                onClick={() => setCycleConfirm(true)}
+                className="shrink-0 rounded-lg border border-navy-200 bg-white px-3.5 py-2 text-sm font-semibold text-navy-900 shadow-sm transition hover:border-navy-400 hover:bg-navy-50 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Start {cycleSpanLabel(windows.currentCycleYear + 1)} cycle →
+              </button>
+            )}
+          </div>
+
           <div className="border-b border-slate-100 bg-slate-50/60 px-5 py-3">
             <h3 className="text-xs font-semibold uppercase tracking-wider text-slate-500">
               Review windows

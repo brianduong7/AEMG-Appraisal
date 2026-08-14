@@ -8,6 +8,25 @@ import type {
 } from "@/lib/types";
 import { CAPABILITY_ORDER } from "@/lib/types";
 
+/**
+ * ownerUserId below is now each person's REAL ERPNext Employee id, not a
+ * placeholder. As of 2026-08-14 these 10 people (and their KPIs, capability
+ * ratings, comments, and final scores below) exist as real, persisted
+ * Appraisal + Employee records on aemg-dev.local - created by
+ * `aemg_epm_frappe.setup.dev_seed.seed_hr_demo_appraisals`, which mirrors
+ * this same content. Previously ownerUserId was a fake "erp-000xx" string
+ * matching nothing in ERPNext, so any write against one of these local rows
+ * (e.g. an HR override) silently went nowhere. Because `erpnextEmployeeIdForOwner`
+ * passes HR-EMP-* ids through untranslated (same mechanism SSO users use),
+ * these rows now mirror for real via the on-behalf-of path.
+ *
+ * The two fixture files are still separate sources of truth kept in sync by
+ * hand - this local list still drives the Super Admin UI's fast read path;
+ * only the target of any write changed. Note: ERPNext's Employee.employee_name
+ * is server-computed from first/last name, so the bilingual display name
+ * used below (e.g. "KevinChen 陈凯") is cosmetic-only here and does not
+ * round-trip to the ERPNext side, which shows "Kevin Chen".
+ */
 /** Stable ids — one per ERP-style demo employee (HR inbox). */
 export const DEMO_HR_SEED_IDS = {
   kevinChen: "00000000-0000-4000-8000-000000000009",
@@ -87,7 +106,7 @@ type DemoHrSeedRaw = Parameters<typeof migrateAppraisal>[0];
 const DEMO_HR_COMPLETED_RAW: DemoHrSeedRaw[] = [
   {
     id: DEMO_HR_SEED_IDS.kevinChen,
-    ownerUserId: "erp-00009",
+    ownerUserId: "HR-EMP-00007",
     reviewingManagerId: null,
     employeeName: "KevinChen 陈凯",
     englishName: "Kevin Chen",
@@ -136,7 +155,7 @@ const DEMO_HR_COMPLETED_RAW: DemoHrSeedRaw[] = [
   },
   {
     id: DEMO_HR_SEED_IDS.vivianWang,
-    ownerUserId: "erp-00010",
+    ownerUserId: "HR-EMP-00008",
     reviewingManagerId: null,
     employeeName: "Vivian 王睿",
     englishName: "Vivian Wang",
@@ -185,7 +204,7 @@ const DEMO_HR_COMPLETED_RAW: DemoHrSeedRaw[] = [
   },
   {
     id: DEMO_HR_SEED_IDS.thomasPower,
-    ownerUserId: "erp-00011",
+    ownerUserId: "HR-EMP-00009",
     reviewingManagerId: null,
     employeeName: "Thomas Power",
     englishName: "Thomas Power",
@@ -234,7 +253,7 @@ const DEMO_HR_COMPLETED_RAW: DemoHrSeedRaw[] = [
   },
   {
     id: DEMO_HR_SEED_IDS.amyNgo,
-    ownerUserId: "erp-00012",
+    ownerUserId: "HR-EMP-00010",
     reviewingManagerId: null,
     employeeName: "Dr. Amy Ngo",
     englishName: "Dr. Amy Ngo",
@@ -283,7 +302,7 @@ const DEMO_HR_COMPLETED_RAW: DemoHrSeedRaw[] = [
   },
   {
     id: DEMO_HR_SEED_IDS.iainWatt,
-    ownerUserId: "erp-00070",
+    ownerUserId: "HR-EMP-00011",
     reviewingManagerId: null,
     employeeName: "Iain Watt",
     englishName: "Iain Watt",
@@ -332,7 +351,7 @@ const DEMO_HR_COMPLETED_RAW: DemoHrSeedRaw[] = [
   },
   {
     id: DEMO_HR_SEED_IDS.sarahLim,
-    ownerUserId: "erp-00013",
+    ownerUserId: "HR-EMP-00012",
     reviewingManagerId: null,
     employeeName: "Sarah Lim",
     englishName: "Sarah Lim",
@@ -372,7 +391,7 @@ const DEMO_HR_COMPLETED_RAW: DemoHrSeedRaw[] = [
   },
   {
     id: DEMO_HR_SEED_IDS.jamesWu,
-    ownerUserId: "erp-00014",
+    ownerUserId: "HR-EMP-00013",
     reviewingManagerId: null,
     employeeName: "James Wu",
     englishName: "James Wu",
@@ -412,7 +431,7 @@ const DEMO_HR_COMPLETED_RAW: DemoHrSeedRaw[] = [
   },
   {
     id: DEMO_HR_SEED_IDS.priyaSharma,
-    ownerUserId: "erp-00015",
+    ownerUserId: "HR-EMP-00014",
     reviewingManagerId: null,
     employeeName: "Priya Sharma",
     englishName: "Priya Sharma",
@@ -452,7 +471,7 @@ const DEMO_HR_COMPLETED_RAW: DemoHrSeedRaw[] = [
   },
   {
     id: DEMO_HR_SEED_IDS.michaelZhang,
-    ownerUserId: "erp-00016",
+    ownerUserId: "HR-EMP-00015",
     reviewingManagerId: null,
     employeeName: "Michael Zhang",
     englishName: "Michael Zhang",
@@ -493,7 +512,7 @@ const DEMO_HR_COMPLETED_RAW: DemoHrSeedRaw[] = [
   },
   {
     id: DEMO_HR_SEED_IDS.lisaTran,
-    ownerUserId: "erp-00017",
+    ownerUserId: "HR-EMP-00016",
     reviewingManagerId: null,
     employeeName: "Lisa Tran",
     englishName: "Lisa Tran",

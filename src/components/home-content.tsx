@@ -22,6 +22,9 @@ import {
 } from "@/lib/nav-roles";
 import { downloadHrAppraisalReport } from "@/lib/hr-export";
 
+/** Rows per page in the appraisal list table. */
+const PAGE_SIZE = 20;
+
 function cycleStatusBadge(status: CycleStatus) {
   const map: Record<CycleStatus, string> = {
     not_started: "border border-slate-200 bg-slate-50 text-slate-500",
@@ -60,8 +63,15 @@ function CycleStatusPill({ status }: { status: CycleStatus }) {
   );
 }
 
+/**
+ * AEMG's appraisal cycle runs August -> August, not the calendar year, so
+ * `year` (the cycleYear a record was stamped with - always the START year)
+ * renders as a span: cycleYear 2026 -> "2026-2027 Annual Appraisal".
+ * Matches erpnext.ts's copy of this function - ERPNext's Appraisal Cycle
+ * doc name must match exactly (it's a Link field).
+ */
 function erpAppraisalCycleLabel(year: number) {
-  return `${year} Annual Appraisal`;
+  return `${year}-${year + 1} Annual Appraisal`;
 }
 
 /** Stable HR-APR-* id from record id (order-independent). */
@@ -105,10 +115,37 @@ export function HomeContent() {
     [searchParams, caps]
   );
   const [employeeFilterId, setEmployeeFilterId] = useState("");
+  const [page, setPage] = useState(1);
+  /* The org's current cycle - HR-advanced (see AdminSettingsPanel), never
+     the wall clock. Used for the hero label and for stamping new exports;
+     each row in the table below shows its OWN cycleYear, which is what
+     matters once a cycle changeover has happened mid-list. */
+  const [currentCycleYear, setCurrentCycleYear] = useState<number | null>(
+    null
+  );
 
   useEffect(() => {
     setEmployeeFilterId("");
   }, [appraisalView]);
+
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/settings");
+        if (!res.ok) return;
+        const body = (await res.json()) as { currentCycleYear?: number };
+        if (!cancelled && typeof body.currentCycleYear === "number") {
+          setCurrentCycleYear(body.currentCycleYear);
+        }
+      } catch {
+        // Hero label falls back to the wall-clock year below; not worth surfacing an error for.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   const refreshList = useCallback(async () => {
     const res = await fetch("/api/appraisals");
@@ -207,6 +244,23 @@ export function HomeContent() {
     return scoped.filter((a) => a.ownerUserId === employeeFilterId);
   }, [list, appraisalView, mode, user, managerId, employeeFilterId]);
 
+  /* Reset to page 1 whenever the underlying result set changes shape -
+     otherwise switching views/filters can strand the user on a now-empty
+     page (e.g. going from page 3 of "team" to a 1-page "my" list). */
+  useEffect(() => {
+    setPage(1);
+  }, [appraisalView, employeeFilterId, list]);
+
+  const totalPages = visibleAppraisals
+    ? Math.max(1, Math.ceil(visibleAppraisals.length / PAGE_SIZE))
+    : 1;
+  const clampedPage = Math.min(page, totalPages);
+  const pagedAppraisals = useMemo(() => {
+    if (!visibleAppraisals) return null;
+    const start = (clampedPage - 1) * PAGE_SIZE;
+    return visibleAppraisals.slice(start, start + PAGE_SIZE);
+  }, [visibleAppraisals, clampedPage]);
+
   const employeeFilterOptions = useMemo(() => {
     if (!list) return [];
     const scoped = filterAppraisalsForView(
@@ -238,7 +292,10 @@ export function HomeContent() {
       : mode === "manager" && managerId
         ? managerId
         : mode === "hr"
-          ? DEMO_HR.id
+          ? // hrProfile.id is the demo HR key for a demo login, and the real
+            // ERPNext Employee id for an SSO user - so an HR user signed in
+            // with Microsoft creates their OWN appraisal, not the demo one's.
+            (hrProfile?.id ?? DEMO_HR.id)
           : null;
 
   const canCreateMyAppraisal = appraisalView === "my" && myOwnerId != null;
@@ -255,7 +312,7 @@ export function HomeContent() {
         ? managerProfile.displayName
         : user?.englishName || user?.employeeName || "there";
 
-  const cycleYear = useMemo(() => new Date().getFullYear(), []);
+  const cycleYear = currentCycleYear ?? new Date().getFullYear();
 
   return (
     <AppShell active="list">
@@ -523,7 +580,7 @@ export function HomeContent() {
                   </tr>
                 </thead>
                 <tbody>
-                  {visibleAppraisals.map((a) => (
+                  {(pagedAppraisals ?? []).map((a) => (
                     <tr
                       key={a.id}
                       tabIndex={0}
@@ -570,10 +627,10 @@ export function HomeContent() {
                         />
                       </td>
                       <td className="px-4 py-3.5 text-slate-600">
-                        {erpAppraisalCycleLabel(cycleYear)}
+                        {erpAppraisalCycleLabel(a.cycleYear)}
                       </td>
                       <td className="px-4 py-3.5 font-mono text-xs text-slate-500">
-                        {erpAppraisalDocId(cycleYear, a.id)}
+                        {erpAppraisalDocId(a.cycleYear, a.id)}
                       </td>
                       <td className="px-5 py-3.5 text-right">
                         {caps.canSuperAdmin ? (
@@ -653,11 +710,44 @@ export function HomeContent() {
           )}
 
           {visibleAppraisals && visibleAppraisals.length > 0 && (
-            <div className="flex items-center justify-between border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-100 px-5 py-3 text-xs text-slate-500">
               <span>
-                {visibleAppraisals.length} record
+                Showing{" "}
+                {visibleAppraisals.length === 0
+                  ? 0
+                  : (clampedPage - 1) * PAGE_SIZE + 1}
+                –
+                {Math.min(clampedPage * PAGE_SIZE, visibleAppraisals.length)}{" "}
+                of {visibleAppraisals.length} record
                 {visibleAppraisals.length === 1 ? "" : "s"}
               </span>
+
+              {totalPages > 1 && (
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={clampedPage <= 1}
+                    onClick={() => setPage((p) => Math.max(1, p - 1))}
+                    className="rounded-md border border-slate-200 bg-white px-2.5 py-1 font-medium text-slate-600 transition hover:border-navy-300 hover:text-navy-900 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Prev
+                  </button>
+                  <span className="tabular-nums">
+                    Page {clampedPage} of {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={clampedPage >= totalPages}
+                    onClick={() =>
+                      setPage((p) => Math.min(totalPages, p + 1))
+                    }
+                    className="rounded-md border border-slate-200 bg-white px-2.5 py-1 font-medium text-slate-600 transition hover:border-navy-300 hover:text-navy-900 disabled:cursor-not-allowed disabled:opacity-40"
+                  >
+                    Next
+                  </button>
+                </div>
+              )}
+
               <span className="inline-flex items-center gap-1.5">
                 <span className="h-1 w-5 rounded-full bg-gold-500" aria-hidden />
                 AIFE Performance
