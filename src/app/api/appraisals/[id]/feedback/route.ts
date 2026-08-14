@@ -21,9 +21,12 @@ import {
  * lands and the app finally knows who is actually calling.
  */
 
-async function ownerUserIdFor(id: string): Promise<string | null> {
+async function appraisalRefFor(
+  id: string
+): Promise<{ ownerUserId: string; cycleYear: number } | null> {
   const appraisal = await getAppraisal(id);
-  return appraisal?.ownerUserId ?? null;
+  if (!appraisal) return null;
+  return { ownerUserId: appraisal.ownerUserId, cycleYear: appraisal.cycleYear };
 }
 
 export async function GET(
@@ -31,12 +34,12 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const ownerUserId = await ownerUserIdFor(id);
-  if (!ownerUserId) {
+  const ref = await appraisalRefFor(id);
+  if (!ref) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
-  const result = await listFeedbackRequests(ownerUserId);
+  const result = await listFeedbackRequests(ref.ownerUserId, ref.cycleYear);
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 502 });
   }
@@ -48,8 +51,8 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const ownerUserId = await ownerUserIdFor(id);
-  if (!ownerUserId) {
+  const ref = await appraisalRefFor(id);
+  if (!ref) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 
@@ -69,12 +72,16 @@ export async function POST(
     );
   }
 
-  const result = await createFeedbackRequest(ownerUserId, {
-    reviewerName,
-    reviewerRole: String(b.reviewerRole ?? "").trim() || undefined,
-    reviewerBranch: String(b.reviewerBranch ?? "").trim() || undefined,
-    requestedByName: String(b.requestedByName ?? "").trim() || undefined,
-  });
+  const result = await createFeedbackRequest(
+    ref.ownerUserId,
+    {
+      reviewerName,
+      reviewerRole: String(b.reviewerRole ?? "").trim() || undefined,
+      reviewerBranch: String(b.reviewerBranch ?? "").trim() || undefined,
+      requestedByName: String(b.requestedByName ?? "").trim() || undefined,
+    },
+    ref.cycleYear
+  );
   if (!result.ok) {
     return NextResponse.json({ error: result.error }, { status: 502 });
   }
@@ -86,8 +93,8 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const ownerUserId = await ownerUserIdFor(id);
-  if (!ownerUserId) {
+  const ref = await appraisalRefFor(id);
+  if (!ref) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
 

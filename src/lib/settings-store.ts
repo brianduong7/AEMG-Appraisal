@@ -33,6 +33,11 @@ function normalize(raw: unknown): ReviewWindowSettings {
       typeof o.annualReviewOpen === "boolean"
         ? o.annualReviewOpen
         : DEFAULT_REVIEW_WINDOWS.annualReviewOpen,
+    currentCycleYear:
+      typeof o.currentCycleYear === "number" &&
+      Number.isFinite(o.currentCycleYear)
+        ? Math.round(o.currentCycleYear)
+        : DEFAULT_REVIEW_WINDOWS.currentCycleYear,
   };
 }
 
@@ -70,4 +75,20 @@ export async function updateReviewWindows(
   await fs.mkdir(DATA_DIR, { recursive: true });
   await fs.writeFile(DATA_FILE, JSON.stringify(next, null, 2), "utf-8");
   return next;
+}
+
+/**
+ * HR-only: advance the org to the next appraisal cycle (current year + 1).
+ * Every appraisal created after this stamps the new year; existing
+ * appraisals keep whatever `cycleYear` they were created under, so last
+ * cycle's completed appraisals stop counting as "active" against the new
+ * one (see `hasOtherActiveAppraisal` in appraisal-store.ts).
+ *
+ * Deliberately simple: always +1 from the current cycle, no picking an
+ * arbitrary year and no going backwards - that keeps it a one-way, one-click
+ * action HR can't easily misuse.
+ */
+export async function startNewCycle(): Promise<ReviewWindowSettings> {
+  const current = await getReviewWindows();
+  return updateReviewWindows({ currentCycleYear: current.currentCycleYear + 1 });
 }
