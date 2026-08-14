@@ -6,6 +6,7 @@ import { signIn } from "next-auth/react";
 import { DEMO_HR, DEMO_MANAGER, findMockUser } from "@/lib/mock-users";
 import { AppLogo } from "@/components/app-logo";
 import { useSession } from "@/contexts/session-context";
+import { demoLoginsEnabled } from "@/lib/env";
 
 const EMMA_ID = "emma" as const;
 
@@ -86,25 +87,28 @@ export function LoginContent() {
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const showDemo = demoLoginsEnabled();
 
   function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
-    const normalized = email.trim().toLowerCase();
-    if (normalized === DEMO_EMPLOYEE_EMAIL.toLowerCase()) {
-      loginEmployee(EMMA_ID);
-      return;
-    }
-    if (normalized === DEMO_MANAGER_EMAIL.toLowerCase()) {
-      loginManager();
-      return;
-    }
-    if (normalized === DEMO_HR_EMAIL.toLowerCase()) {
-      loginHr();
-      return;
+    if (demoLoginsEnabled()) {
+      const normalized = email.trim().toLowerCase();
+      if (normalized === DEMO_EMPLOYEE_EMAIL.toLowerCase()) {
+        loginEmployee(EMMA_ID);
+        return;
+      }
+      if (normalized === DEMO_MANAGER_EMAIL.toLowerCase()) {
+        loginManager();
+        return;
+      }
+      if (normalized === DEMO_HR_EMAIL.toLowerCase()) {
+        loginHr();
+        return;
+      }
     }
     setError(
-      "That email is not a demo account. Use the addresses in the box below."
+      "Use Sign in with Microsoft to access your appraisals."
     );
   }
 
@@ -173,73 +177,77 @@ export function LoginContent() {
                 Welcome back — access your appraisals.
               </p>
 
-              <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-                <div className={inputShell}>
-                  <MailIcon className="shrink-0 text-navy-600" />
-                  <input
-                    id="login-email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    placeholder="you@aife.edu.au"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="min-w-0 flex-1 border-0 bg-transparent text-sm text-navy-950 placeholder:text-slate-400 outline-none"
-                  />
-                </div>
+              {showDemo && (
+                <>
+                  <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+                    <div className={inputShell}>
+                      <MailIcon className="shrink-0 text-navy-600" />
+                      <input
+                        id="login-email"
+                        name="email"
+                        type="email"
+                        autoComplete="email"
+                        placeholder="you@aife.edu.au"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="min-w-0 flex-1 border-0 bg-transparent text-sm text-navy-950 placeholder:text-slate-400 outline-none"
+                      />
+                    </div>
 
-                <div className={inputShell}>
-                  <LockIcon className="shrink-0 text-navy-600" />
-                  <input
-                    id="login-password"
-                    name="password"
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="current-password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="min-w-0 flex-1 border-0 bg-transparent text-sm text-navy-950 placeholder:text-slate-400 outline-none"
-                  />
-                  <button
-                    type="button"
-                    className="shrink-0 text-xs font-medium text-navy-600 hover:text-navy-800"
-                    onClick={() => setShowPassword((v) => !v)}
-                  >
-                    {showPassword ? "Hide" : "Show"}
-                  </button>
-                </div>
+                    <div className={inputShell}>
+                      <LockIcon className="shrink-0 text-navy-600" />
+                      <input
+                        id="login-password"
+                        name="password"
+                        type={showPassword ? "text" : "password"}
+                        autoComplete="current-password"
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="min-w-0 flex-1 border-0 bg-transparent text-sm text-navy-950 placeholder:text-slate-400 outline-none"
+                      />
+                      <button
+                        type="button"
+                        className="shrink-0 text-xs font-medium text-navy-600 hover:text-navy-800"
+                        onClick={() => setShowPassword((v) => !v)}
+                      >
+                        {showPassword ? "Hide" : "Show"}
+                      </button>
+                    </div>
 
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    className="text-xs font-medium text-navy-600 hover:text-navy-800"
-                    onClick={() => {
-                      /* demo: no reset flow */
-                    }}
-                  >
-                    Forgot password?
-                  </button>
-                </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        className="text-xs font-medium text-navy-600 hover:text-navy-800"
+                        onClick={() => {
+                          /* demo: no reset flow */
+                        }}
+                      >
+                        Forgot password?
+                      </button>
+                    </div>
 
-                {error ? (
-                  <p className="text-xs text-red-600" role="alert">
-                    {error}
-                  </p>
-                ) : null}
+                    {error ? (
+                      <p className="text-xs text-red-600" role="alert">
+                        {error}
+                      </p>
+                    ) : null}
 
-                <button
-                  type="submit"
-                  className="w-full rounded-xl bg-navy-900 py-3 text-sm font-semibold text-white shadow-lg shadow-navy-900/25 transition hover:bg-navy-800"
-                >
-                  Sign in
-                </button>
-              </form>
+                    <button
+                      type="submit"
+                      className="w-full rounded-xl bg-navy-900 py-3 text-sm font-semibold text-white shadow-lg shadow-navy-900/25 transition hover:bg-navy-800"
+                    >
+                      Sign in
+                    </button>
+                  </form>
 
-              <div className="my-5 flex items-center gap-3">
-                <div className="h-px flex-1 bg-slate-200" aria-hidden />
-                <span className="shrink-0 text-xs text-slate-400">or</span>
-                <div className="h-px flex-1 bg-slate-200" aria-hidden />
-              </div>
+                  <div className="my-5 flex items-center gap-3">
+                    <div className="h-px flex-1 bg-slate-200" aria-hidden />
+                    <span className="shrink-0 text-xs text-slate-400">or</span>
+                    <div className="h-px flex-1 bg-slate-200" aria-hidden />
+                  </div>
+                </>
+              )}
 
               {/*
                 Uses Auth.js's signIn() rather than posting to the sign-in
@@ -270,34 +278,38 @@ export function LoginContent() {
                 </p>
               )}
 
-              <div className="my-5 flex items-center gap-3">
-                <div className="h-px flex-1 bg-slate-200" aria-hidden />
-                <span className="shrink-0 text-xs text-slate-400">
-                  demo accounts
-                </span>
-                <div className="h-px flex-1 bg-slate-200" aria-hidden />
-              </div>
+              {showDemo && (
+                <>
+                  <div className="my-5 flex items-center gap-3">
+                    <div className="h-px flex-1 bg-slate-200" aria-hidden />
+                    <span className="shrink-0 text-xs text-slate-400">
+                      demo accounts
+                    </span>
+                    <div className="h-px flex-1 bg-slate-200" aria-hidden />
+                  </div>
 
-              <div className="grid gap-2">
-                <DemoAccountRow
-                  name={`${emma?.englishName || emma?.employeeName || "Emma Thompson"} · Employee`}
-                  email={DEMO_EMPLOYEE_EMAIL}
-                  onClick={() => quickLogin("employee")}
-                />
-                <DemoAccountRow
-                  name={`${DEMO_MANAGER.displayName} · Manager`}
-                  email={DEMO_MANAGER_EMAIL}
-                  onClick={() => quickLogin("manager")}
-                />
-                <DemoAccountRow
-                  name={`${DEMO_HR.displayName} · HR / Super Admin`}
-                  email={DEMO_HR_EMAIL}
-                  onClick={() => quickLogin("hr")}
-                />
-              </div>
-              <p className="mt-3 text-center text-[11px] text-slate-400">
-                Password is not checked in this demo — click a role to sign in.
-              </p>
+                  <div className="grid gap-2">
+                    <DemoAccountRow
+                      name={`${emma?.englishName || emma?.employeeName || "Emma Thompson"} · Employee`}
+                      email={DEMO_EMPLOYEE_EMAIL}
+                      onClick={() => quickLogin("employee")}
+                    />
+                    <DemoAccountRow
+                      name={`${DEMO_MANAGER.displayName} · Manager`}
+                      email={DEMO_MANAGER_EMAIL}
+                      onClick={() => quickLogin("manager")}
+                    />
+                    <DemoAccountRow
+                      name={`${DEMO_HR.displayName} · HR / Super Admin`}
+                      email={DEMO_HR_EMAIL}
+                      onClick={() => quickLogin("hr")}
+                    />
+                  </div>
+                  <p className="mt-3 text-center text-[11px] text-slate-400">
+                    Password is not checked in this demo — click a role to sign in.
+                  </p>
+                </>
+              )}
             </div>
           </div>
         </div>

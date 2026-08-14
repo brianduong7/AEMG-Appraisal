@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import {
   getReviewWindows,
+  startNewCycle,
   updateReviewWindows,
 } from "@/lib/settings-store";
 import type { ReviewWindowSettings } from "@/lib/types";
@@ -21,6 +22,14 @@ export async function PATCH(request: Request) {
     return NextResponse.json({ error: "Invalid body" }, { status: 400 });
   }
   const o = body as Record<string, unknown>;
+
+  /* Cycle advancement is a distinct, deliberate action - not a raw field
+     patch (that would let a client set currentCycleYear to anything). */
+  if (o.startNextCycle === true) {
+    const next = await startNewCycle();
+    return NextResponse.json(next);
+  }
+
   const patch: Partial<ReviewWindowSettings> = {};
   if (typeof o.kpiSubmissionOpen === "boolean") {
     patch.kpiSubmissionOpen = o.kpiSubmissionOpen;

@@ -228,8 +228,17 @@ export function migrateAppraisal(raw: unknown): Appraisal {
   const storedManagerName = String(a.managerName ?? "").trim();
   const managerName = storedManagerName || directory?.managerName || "";
 
+  /* Legacy rows (created before cycleYear existed) default to the current
+     year - there was no cycle distinction before this field, so "this year"
+     is the closest honest equivalent. */
+  const cycleYear =
+    typeof a.cycleYear === "number" && Number.isFinite(a.cycleYear)
+      ? Math.round(a.cycleYear)
+      : new Date().getFullYear();
+
   return {
     id: String(a.id ?? ""),
+    cycleYear,
     ownerUserId,
     reviewingManagerId,
     employeeName,

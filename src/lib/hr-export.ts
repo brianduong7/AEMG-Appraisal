@@ -90,7 +90,7 @@ export function downloadHrAppraisalReport(
       h = (Math.imul(31, h) + a.id.charCodeAt(i)) >>> 0;
     }
     const seq = (h % 99_998) + 1;
-    const reference = `HR-APR-${cycleYear}-${String(seq).padStart(5, "0")}`;
+    const reference = `HR-APR-${a.cycleYear}-${String(seq).padStart(5, "0")}`;
 
     const mgr = formatOverall(appraisalOverallScore(a));
     const self = formatOverall(appraisalSelfOverallScore(a));
@@ -98,7 +98,7 @@ export function downloadHrAppraisalReport(
 
     return [
       reference,
-      `${cycleYear} Annual Appraisal`,
+      `${a.cycleYear} Annual Appraisal`,
       a.employeeName || "",
       a.englishName || "",
       a.position || "",

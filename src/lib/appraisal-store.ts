@@ -18,6 +18,7 @@ import {
   removeNotificationsForAppraisal,
 } from "./notification-store";
 import { mirrorAppraisalCreateToErpnext } from "./erpnext";
+import { getReviewWindows } from "./settings-store";
 
 const DATA_DIR = path.join(process.cwd(), "data");
 const DATA_FILE = path.join(DATA_DIR, "appraisals.json");
@@ -77,30 +78,50 @@ async function ensureFile(): Promise<Appraisal[]> {
 }
 
 /**
- * Demo: exactly one appraisal row per `ownerUserId`. Last row in list order wins;
- * others are removed and their notifications cleared.
+ * An employee may hold as many DRAFT appraisals as they like - drafts are
+ * never touched or removed here. But only one ACTIVE (non-draft: submitted,
+ * reviewed, or completed) appraisal per owner may exist at a time; that's
+ * the real constraint, enforced primarily at submit time (see
+ * `assertNoOtherActiveAppraisal` and its call site in the appraisals API
+ * route). This pass is a safety net, not the primary gate: it collapses
+ * non-draft duplicates down to the last one in list order, in case one ever
+ * slips through (a race, a bug, stray data from before this rule existed).
+ * Draft rows are always kept, however many there are.
  */
-async function enforceOneAppraisalPerOwner(list: Appraisal[]): Promise<{
+/** owner + cycle is the real key for "one active appraisal" - see cycleYear's docstring in types.ts. */
+function activeKey(a: Appraisal): string {
+  return `${a.ownerUserId}::${a.cycleYear}`;
+}
+
+async function enforceOneActiveAppraisalPerOwner(list: Appraisal[]): Promise<{
   next: Appraisal[];
   changed: boolean;
 }> {
-  const chosen = new Map<string, Appraisal>();
+  const chosenActive = new Map<string, Appraisal>();
   for (const a of list) {
-    chosen.set(a.ownerUserId, a);
+    if (a.status === "draft") continue;
+    chosenActive.set(activeKey(a), a);
   }
-  const keepIds = new Set([...chosen.values()].map((x) => x.id));
-  const dropped = list.filter((a) => !keepIds.has(a.id));
+  const keepActiveIds = new Set([...chosenActive.values()].map((x) => x.id));
+  const dropped = list.filter(
+    (a) => a.status !== "draft" && !keepActiveIds.has(a.id)
+  );
   for (const a of dropped) {
     await removeNotificationsForAppraisal(a.id);
   }
 
   const ordered: Appraisal[] = [];
-  const seenOwner = new Set<string>();
+  const seenActiveKey = new Set<string>();
   for (const a of list) {
-    const pick = chosen.get(a.ownerUserId)!;
-    if (a.id !== pick.id || seenOwner.has(a.ownerUserId)) continue;
+    if (a.status === "draft") {
+      ordered.push(a);
+      continue;
+    }
+    const key = activeKey(a);
+    const pick = chosenActive.get(key)!;
+    if (a.id !== pick.id || seenActiveKey.has(key)) continue;
     ordered.push(a);
-    seenOwner.add(a.ownerUserId);
+    seenActiveKey.add(key);
   }
 
   const changed = ordered.length !== list.length;
@@ -110,7 +131,31 @@ async function enforceOneAppraisalPerOwner(list: Appraisal[]): Promise<{
 async function applyAppraisalListPolicy(
   list: Appraisal[]
 ): Promise<{ next: Appraisal[]; changed: boolean }> {
-  return enforceOneAppraisalPerOwner(list);
+  return enforceOneActiveAppraisalPerOwner(list);
+}
+
+/**
+ * True if `ownerUserId` already has an appraisal in `cycleYear` with
+ * status !== "draft", other than `excludeId`. Scoped to the SAME cycle
+ * deliberately - a completed appraisal from a prior cycle must never block
+ * submitting this cycle's (see cycleYear's docstring in types.ts for why
+ * that bug existed before this field did). Callers use this to refuse a
+ * submit ("save" is always allowed - only submitting turns a draft into
+ * the one active slot for its cycle).
+ */
+export async function hasOtherActiveAppraisal(
+  ownerUserId: string,
+  excludeId: string,
+  cycleYear: number
+): Promise<boolean> {
+  const list = await readAppraisals();
+  return list.some(
+    (a) =>
+      a.ownerUserId === ownerUserId &&
+      a.id !== excludeId &&
+      a.cycleYear === cycleYear &&
+      a.status !== "draft"
+  );
 }
 
 async function ensureDemoSubmittedEmmaForMark(
@@ -257,8 +302,10 @@ export async function createAppraisal(
   const reviewingManagerId = owner
     ? owner.reviewingManagerId
     : reviewingManagerIdForOwner(ownerUserId);
+  const { currentCycleYear } = await getReviewWindows();
   const raw = {
     id,
+    cycleYear: currentCycleYear,
     ownerUserId,
     reviewingManagerId,
     ...profile,
@@ -292,7 +339,7 @@ export async function createAppraisal(
   // so it reliably completes before the request ends, but a failure here
   // still never breaks the local demo flow - see erpnext.ts's module
   // docstring for what this does and does not cover yet.
-  await mirrorAppraisalCreateToErpnext(ownerUserId);
+  await mirrorAppraisalCreateToErpnext(ownerUserId, currentCycleYear);
 
   return result;
 }

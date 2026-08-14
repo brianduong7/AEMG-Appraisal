@@ -86,9 +86,10 @@ function mapRequest(raw: RawFeedbackRequest): FeedbackRequest {
  * the call", and the fix for it is different too.
  */
 async function requireErpnextAppraisal(
-  ownerUserId: string
+  ownerUserId: string,
+  cycleYear: number
 ): Promise<ErpnextResult<string>> {
-  const appraisal = await findErpnextAppraisalName(ownerUserId);
+  const appraisal = await findErpnextAppraisalName(ownerUserId, cycleYear);
   if (!appraisal) {
     return {
       ok: false,
@@ -107,9 +108,10 @@ export async function createFeedbackRequest(
     reviewerRole?: string;
     reviewerBranch?: string;
     requestedByName?: string;
-  }
+  },
+  cycleYear: number
 ): Promise<ErpnextResult<{ name: string; token: string }>> {
-  const appraisal = await requireErpnextAppraisal(ownerUserId);
+  const appraisal = await requireErpnextAppraisal(ownerUserId, cycleYear);
   if (!appraisal.ok) return appraisal;
 
   return erpnextApiCall<{ name: string; token: string }>(
@@ -126,9 +128,10 @@ export async function createFeedbackRequest(
 
 /** Manager or HR: every request against this appraisal, newest first. */
 export async function listFeedbackRequests(
-  ownerUserId: string
+  ownerUserId: string,
+  cycleYear: number
 ): Promise<ErpnextResult<FeedbackRequest[]>> {
-  const appraisal = await requireErpnextAppraisal(ownerUserId);
+  const appraisal = await requireErpnextAppraisal(ownerUserId, cycleYear);
   if (!appraisal.ok) return appraisal;
 
   const result = await erpnextApiCall<RawFeedbackRequest[]>(

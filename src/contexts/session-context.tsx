@@ -15,6 +15,7 @@ import {
   findMockUser,
   type MockUser,
 } from "@/lib/mock-users";
+import { demoLoginsEnabled } from "@/lib/env";
 
 const USER_KEY = "aemg-appraisal-user-id";
 const MODE_KEY = "aemg-session-mode";
@@ -186,6 +187,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     }
 
     function restoreDemoSession() {
+      /* Defense in depth: even a stale localStorage session (e.g. copied
+         from a dev browser profile, or an env misconfiguration reversed
+         mid-session) must not resurrect a demo identity where demo logins
+         are disabled. */
+      if (!demoLoginsEnabled()) return;
       try {
         let m = localStorage.getItem(MODE_KEY) as SessionMode | null;
         const id = localStorage.getItem(USER_KEY);
@@ -227,6 +233,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const loginEmployee = useCallback((userId: string) => {
+    if (!demoLoginsEnabled()) return;
     const u = findMockUser(userId);
     if (!u) return;
     setMode("employee");
@@ -243,6 +250,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const loginManager = useCallback(() => {
+    if (!demoLoginsEnabled()) return;
     setMode("manager");
     setUser(null);
     setManagerProfile({
@@ -260,6 +268,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const loginHr = useCallback(() => {
+    if (!demoLoginsEnabled()) return;
     setMode("hr");
     setUser(null);
     setManagerProfile(null);

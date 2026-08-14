@@ -33,10 +33,17 @@
  * unreachable or rejects the call.
  */
 
-// Matches home-content.tsx's erpAppraisalCycleLabel() - ERPNext's seeded
-// Appraisal Cycle is literally named "2026 Annual Appraisal".
+/**
+ * Matches home-content.tsx's erpAppraisalCycleLabel(). AEMG's appraisal
+ * cycle runs August -> August, not the calendar year, so `year` (the
+ * cycleYear a record was stamped with - always the START year) renders as
+ * a span, e.g. cycleYear 2026 -> "2026-2027 Annual Appraisal". ERPNext's
+ * Appraisal Cycle doc must be named to match exactly (it's a Link field);
+ * renamed from the old single-year "2026 Annual Appraisal" to
+ * "2026-2027 Annual Appraisal" on aemg-dev.local on 2026-08-14 to line up.
+ */
 function erpAppraisalCycleLabel(year: number): string {
-  return `${year} Annual Appraisal`;
+  return `${year}-${year + 1} Annual Appraisal`;
 }
 
 /**
@@ -283,12 +290,13 @@ function actingAs(ownerUserId: string): ActingAs | null {
  * or null if skipped/failed.
  */
 export async function mirrorAppraisalCreateToErpnext(
-  ownerUserId: string
+  ownerUserId: string,
+  cycleYear: number
 ): Promise<string | null> {
   const employee = erpnextEmployeeIdForOwner(ownerUserId);
   if (!employee) return null;
 
-  const appraisalCycle = erpAppraisalCycleLabel(new Date().getFullYear());
+  const appraisalCycle = erpAppraisalCycleLabel(cycleYear);
   const result = await erpnextMethodCall<{ name: string }>("create_appraisal", {
     appraisal_cycle: appraisalCycle,
     employee,
@@ -299,18 +307,25 @@ export async function mirrorAppraisalCreateToErpnext(
 }
 
 /**
- * Look up the ERPNext Appraisal `name` for this owner's current-year cycle.
- * We don't persist the ERPNext doc id on the local record (no schema change
+ * Look up the ERPNext Appraisal `name` for this owner's cycle. `cycleYear`
+ * is the LOCAL record's own stamped cycle (types.ts `Appraisal.cycleYear`),
+ * not the wall clock - this used to default to `new Date().getFullYear()`
+ * unconditionally, which quietly broke the moment HR advanced the cycle
+ * ahead of the calendar year, or looked a record up after year-end. We
+ * don't persist the ERPNext doc id on the local record (no schema change
  * for this slice), so every mirror call re-resolves it by employee + cycle.
  * Returns null if unconfigured, unmapped, unreachable, or genuinely not
  * found (e.g. the create-appraisal mirror failed or hasn't run yet).
  */
-export async function findErpnextAppraisalName(ownerUserId: string): Promise<string | null> {
+export async function findErpnextAppraisalName(
+  ownerUserId: string,
+  cycleYear: number
+): Promise<string | null> {
   if (!erpnextConfigured()) return null;
   const employee = erpnextEmployeeIdForOwner(ownerUserId);
   if (!employee) return null;
 
-  const appraisalCycle = erpAppraisalCycleLabel(new Date().getFullYear());
+  const appraisalCycle = erpAppraisalCycleLabel(cycleYear);
   const filters = encodeURIComponent(
     JSON.stringify([
       ["employee", "=", employee],
@@ -350,8 +365,11 @@ export async function findErpnextAppraisalName(ownerUserId: string): Promise<str
  * under the shared service account - see module docstring. Best-effort:
  * returns true only when ERPNext genuinely transitioned to KPI Approved.
  */
-export async function mirrorKpiApproveToErpnext(ownerUserId: string): Promise<boolean> {
-  const appraisal = await findErpnextAppraisalName(ownerUserId);
+export async function mirrorKpiApproveToErpnext(
+  ownerUserId: string,
+  cycleYear: number
+): Promise<boolean> {
+  const appraisal = await findErpnextAppraisalName(ownerUserId, cycleYear);
   if (!appraisal) return false;
 
   const result = await erpnextMethodCall<{ aemg_kpi_status: string }>("approve_kpis", {
@@ -373,9 +391,10 @@ export async function mirrorKpiApproveToErpnext(ownerUserId: string): Promise<bo
  */
 export async function mirrorMidYearCompleteToErpnext(
   ownerUserId: string,
-  managerComments: string
+  managerComments: string,
+  cycleYear: number
 ): Promise<boolean> {
-  const appraisal = await findErpnextAppraisalName(ownerUserId);
+  const appraisal = await findErpnextAppraisalName(ownerUserId, cycleYear);
   if (!appraisal) return false;
 
   const result = await erpnextMethodCall<{ aemg_mid_year_status: string }>(
@@ -404,9 +423,10 @@ export async function mirrorMidYearCompleteToErpnext(
 export async function mirrorAnnualManagerSubmitToErpnext(
   ownerUserId: string,
   kpis: { managerRating: number | null }[],
-  capabilities: { id: string; managerRating: number | null }[]
+  capabilities: { id: string; managerRating: number | null }[],
+  cycleYear: number
 ): Promise<boolean> {
-  const appraisal = await findErpnextAppraisalName(ownerUserId);
+  const appraisal = await findErpnextAppraisalName(ownerUserId, cycleYear);
   if (!appraisal) return false;
 
   const goalRatings = kpis.map((k, i) => ({ idx: i + 1, score: k.managerRating }));
@@ -445,9 +465,10 @@ export async function mirrorAnnualManagerSubmitToErpnext(
  */
 export async function mirrorAppraisalCompleteToErpnext(
   ownerUserId: string,
-  managerOverallOverride: number | null
+  managerOverallOverride: number | null,
+  cycleYear: number
 ): Promise<boolean> {
-  const appraisal = await findErpnextAppraisalName(ownerUserId);
+  const appraisal = await findErpnextAppraisalName(ownerUserId, cycleYear);
   if (!appraisal) return false;
 
   const result = await erpnextMethodCall<{ aemg_annual_status: string }>(
@@ -502,9 +523,10 @@ export async function mirrorHrUpdateToErpnext(
     midYearManagerComments: string;
     midYearStatus: string;
     managerOverallOverride: number | null;
-  }
+  },
+  cycleYear: number
 ): Promise<boolean> {
-  const appraisal = await findErpnextAppraisalName(ownerUserId);
+  const appraisal = await findErpnextAppraisalName(ownerUserId, cycleYear);
   if (!appraisal) return false;
 
   const goals = fields.kpis.map((k) => ({
@@ -564,11 +586,12 @@ export async function mirrorHrUpdateToErpnext(
  */
 export async function mirrorKpiSubmitToErpnext(
   ownerUserId: string,
-  kpis: { goalsAndKpis: string; weightPercent: number; dueDate: string }[]
+  kpis: { goalsAndKpis: string; weightPercent: number; dueDate: string }[],
+  cycleYear: number
 ): Promise<boolean> {
   const acting = actingAs(ownerUserId);
   if (!acting) return false;
-  const appraisal = await findErpnextAppraisalName(ownerUserId);
+  const appraisal = await findErpnextAppraisalName(ownerUserId, cycleYear);
   if (!appraisal) return false;
 
   const goals = kpis.map((k) => ({
@@ -603,11 +626,12 @@ export async function mirrorKpiSubmitToErpnext(
  */
 export async function mirrorMidYearEmployeeSubmitToErpnext(
   ownerUserId: string,
-  kpis: { midYearRating: string | null }[]
+  kpis: { midYearRating: string | null }[],
+  cycleYear: number
 ): Promise<boolean> {
   const acting = actingAs(ownerUserId);
   if (!acting) return false;
-  const appraisal = await findErpnextAppraisalName(ownerUserId);
+  const appraisal = await findErpnextAppraisalName(ownerUserId, cycleYear);
   if (!appraisal) return false;
 
   const ratings = kpis.map((k, i) => ({
@@ -640,11 +664,12 @@ export async function mirrorMidYearEmployeeSubmitToErpnext(
 export async function mirrorAnnualSelfSubmitToErpnext(
   ownerUserId: string,
   kpis: { selfRating: number | null }[],
-  capabilities: { id: string; selfRating: number | null }[]
+  capabilities: { id: string; selfRating: number | null }[],
+  cycleYear: number
 ): Promise<boolean> {
   const acting = actingAs(ownerUserId);
   if (!acting) return false;
-  const appraisal = await findErpnextAppraisalName(ownerUserId);
+  const appraisal = await findErpnextAppraisalName(ownerUserId, cycleYear);
   if (!appraisal) return false;
 
   const goalRatings = kpis.map((k, i) => ({ idx: i + 1, aemg_self_score: k.selfRating }));
