@@ -21,3 +21,22 @@ export function demoLoginsEnabled(): boolean {
   if (process.env.NODE_ENV !== "production") return true;
   return process.env.NEXT_PUBLIC_ENABLE_DEMO_LOGINS === "true";
 }
+
+/**
+ * Whether the email/password sign-in form (real ERPNext-verified login,
+ * see auth.ts's Credentials provider) should exist at all. Prod's client
+ * confirmed prod must allow Microsoft sign-in ONLY - nothing else, not even
+ * the real password path. Same shape as demoLoginsEnabled(): safe-by-default
+ * (off unless explicitly turned on), checked both in the login UI (don't
+ * render the form) and server-side in auth.ts's `authorize()` (refuse the
+ * sign-in attempt even if someone posts directly to the credentials
+ * callback, bypassing the UI entirely) - not just a hidden button.
+ *
+ * - Local `npm run dev`: always on, no config needed.
+ * - Deployed dev App Service: set NEXT_PUBLIC_ENABLE_PASSWORD_LOGIN=true.
+ * - Deployed prod App Service: leave unset - defaults to OFF (Microsoft only).
+ */
+export function passwordLoginEnabled(): boolean {
+  if (process.env.NODE_ENV !== "production") return true;
+  return process.env.NEXT_PUBLIC_ENABLE_PASSWORD_LOGIN === "true";
+}
