@@ -5,7 +5,13 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Appraisal, CycleStatus } from "@/lib/types";
 import { annualCycleStatus, CYCLE_STATUS_LABELS } from "@/lib/types";
-import { appraisalListDisplayName } from "@/lib/entity-theme";
+import {
+  appraisalListDisplayName,
+  entityBrandColor,
+  entityButtonStyle,
+  entityContrastTextClass,
+  entitySecondaryTextStyle,
+} from "@/lib/entity-theme";
 import { DEMO_HR } from "@/lib/mock-users";
 import { useRole } from "@/contexts/role-context";
 import { useSession } from "@/contexts/session-context";
@@ -94,6 +100,7 @@ type ManagerNotification = {
 export function HomeContent() {
   const router = useRouter();
   const { user, mode, managerProfile, hrProfile } = useSession();
+  const brandColor = entityBrandColor(user?.entity);
   const { setRole } = useRole();
   const searchParams = useSearchParams();
   const notice = searchParams.get("notice");
@@ -317,9 +324,15 @@ export function HomeContent() {
   return (
     <AppShell active="list">
       {/* Hero strip */}
-      <div className="aife-hero-gradient text-white">
+      <div
+        className={`aife-hero-gradient text-white ${entityContrastTextClass(brandColor)}`}
+        style={brandColor ? { background: brandColor } : undefined}
+      >
         <div className="mx-auto max-w-[1500px] px-4 pb-8 pt-7 sm:px-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gold-400">
+          <p
+            className="text-xs font-semibold uppercase tracking-[0.18em] text-gold-400"
+            style={entitySecondaryTextStyle(brandColor)}
+          >
             {erpAppraisalCycleLabel(cycleYear)}
           </p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">
@@ -501,6 +514,7 @@ export function HomeContent() {
                   type="button"
                   disabled={createBusy}
                   className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  style={entityButtonStyle(brandColor)}
                   onClick={() => createAppraisalForOwner(myOwnerId!)}
                 >
                   {createBusy ? "Creating…" : "+ New Appraisal"}
@@ -526,6 +540,7 @@ export function HomeContent() {
                   type="button"
                   disabled={createBusy}
                   className="mt-4 rounded-lg bg-navy-900 px-5 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  style={entityButtonStyle(brandColor)}
                   onClick={() => createAppraisalForOwner(myOwnerId!)}
                 >
                   {createBusy ? "Creating…" : "Create first appraisal"}
@@ -668,6 +683,7 @@ export function HomeContent() {
                             <button
                               type="button"
                               className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-navy-900 text-white shadow-sm transition hover:bg-navy-800"
+                              style={entityButtonStyle(brandColor)}
                               title="Edit (opens HR Admin)"
                               aria-label="Edit"
                               onClick={(e) => {
@@ -750,7 +766,7 @@ export function HomeContent() {
 
               <span className="inline-flex items-center gap-1.5">
                 <span className="h-1 w-5 rounded-full bg-gold-500" aria-hidden />
-                AIFE Performance
+                Performance
               </span>
             </div>
           )}

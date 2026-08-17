@@ -47,6 +47,18 @@
   border-bottom: 1px solid rgb(255 255 255 / 0.08);
 }
 
+/*
+ * Brand-entity surfaces (AEMG/AOSC/Cloudcampus/W&E Health) are all lighter
+ * than AIFE's navy - white text (designed for navy) doesn't read on them.
+ * Applied alongside the inline background-color override, on the same
+ * container - forces every descendant (text, icons via currentColor) dark,
+ * regardless of its own text-white/xx or text-gold-xxx utility class.
+ */
+.entity-brand-dark-text,
+.entity-brand-dark-text * {
+  color: #1f2328 !important;
+}
+
 .aife-gold-underline {
   background-image: linear-gradient(90deg, #c9a227, #e3be4a 55%, transparent);
   background-repeat: no-repeat;

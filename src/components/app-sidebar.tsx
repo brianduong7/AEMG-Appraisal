@@ -10,13 +10,25 @@ import {
   parseAppraisalView,
   type AppraisalNavView,
 } from "@/lib/nav-roles";
+import {
+  entityBrandColor,
+  entityContrastTextClass,
+  entitySecondaryTextStyle,
+} from "@/lib/entity-theme";
 
 const SIDEBAR_KEY = "aife-sidebar-open";
 
-function IconCog({ className }: { className?: string }) {
+function IconCog({
+  className,
+  style,
+}: {
+  className?: string;
+  style?: React.CSSProperties;
+}) {
   return (
     <svg
       className={className}
+      style={style}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -37,10 +49,17 @@ function IconCog({ className }: { className?: string }) {
   );
 }
 
-function IconUser({ className }: { className?: string }) {
+function IconUser({
+  className,
+  style,
+}: {
+  className?: string;
+  style?: React.CSSProperties;
+}) {
   return (
     <svg
       className={className}
+      style={style}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -56,10 +75,17 @@ function IconUser({ className }: { className?: string }) {
   );
 }
 
-function IconTeam({ className }: { className?: string }) {
+function IconTeam({
+  className,
+  style,
+}: {
+  className?: string;
+  style?: React.CSSProperties;
+}) {
   return (
     <svg
       className={className}
+      style={style}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -75,10 +101,17 @@ function IconTeam({ className }: { className?: string }) {
   );
 }
 
-function IconShield({ className }: { className?: string }) {
+function IconShield({
+  className,
+  style,
+}: {
+  className?: string;
+  style?: React.CSSProperties;
+}) {
   return (
     <svg
       className={className}
+      style={style}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -109,6 +142,7 @@ export function AppSidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { mode, user, managerProfile, hrProfile } = useSession();
+  const brandColor = entityBrandColor(user?.entity);
   const [open, setOpen] = useState(true);
   const [ready, setReady] = useState(false);
 
@@ -192,6 +226,13 @@ export function AppSidebar() {
     }`;
   }
 
+  function iconStyle(active: boolean) {
+    // AIFE's gold is AIFE's own accent - other entities get dark grey instead.
+    if (!brandColor) return undefined;
+    if (active) return entitySecondaryTextStyle(brandColor);
+    return undefined; // inactive/hover state already reads via white/xx opacity
+  }
+
   return (
     <>
       {/* Scrim when open — click to close */}
@@ -212,7 +253,8 @@ export function AppSidebar() {
         <button
           type="button"
           onClick={toggle}
-          className="fixed left-0 top-1/2 z-50 flex h-14 w-8 -translate-y-1/2 items-center justify-center rounded-r-lg border border-l-0 border-navy-800 bg-navy-900 text-gold-400 shadow-lg shadow-navy-900/40 transition hover:w-9 hover:bg-navy-800 hover:text-gold-300"
+          className={`fixed left-0 top-1/2 z-50 flex h-14 w-8 -translate-y-1/2 items-center justify-center rounded-r-lg bg-navy-900 text-gold-400 shadow-lg shadow-navy-900/40 transition hover:w-9 hover:bg-navy-800 hover:text-gold-300 ${entityContrastTextClass(brandColor)}`}
+          style={brandColor ? { background: brandColor } : undefined}
           title="Open appraisal menu"
           aria-label="Open appraisal menu"
           aria-expanded={false}
@@ -238,13 +280,17 @@ export function AppSidebar() {
       <aside
         className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-navy-900 text-white shadow-2xl shadow-navy-900/50 transition-transform duration-300 ease-out ${
           open ? "translate-x-0" : "-translate-x-full"
-        }`}
+        } ${entityContrastTextClass(brandColor)}`}
+        style={brandColor ? { background: brandColor } : undefined}
         aria-label="Appraisal navigation"
         aria-hidden={!open}
       >
         <div className="flex items-center border-b border-white/10 px-3 py-3.5">
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gold-400">
+            <p
+              className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gold-400"
+              style={entitySecondaryTextStyle(brandColor)}
+            >
               Appraisal
             </p>
             <p className="truncate text-xs text-white/55">{caps.roleLabel}</p>
@@ -255,7 +301,8 @@ export function AppSidebar() {
         <button
           type="button"
           onClick={toggle}
-          className="absolute top-1/2 -right-7 flex h-14 w-7 -translate-y-1/2 items-center justify-center rounded-r-lg border border-l-0 border-navy-800 bg-navy-900 text-gold-400 shadow-md transition hover:bg-navy-800 hover:text-gold-300"
+          className={`absolute top-1/2 -right-7 flex h-14 w-7 -translate-y-1/2 items-center justify-center rounded-r-lg bg-navy-900 text-gold-400 shadow-md transition hover:bg-navy-800 hover:text-gold-300 ${entityContrastTextClass(brandColor)}`}
+          style={brandColor ? { background: brandColor } : undefined}
           title="Close menu"
           aria-label="Close appraisal menu"
           aria-expanded={true}
@@ -304,7 +351,7 @@ export function AppSidebar() {
                 onClick={() => setOpenPersist(false)}
                 className={navLinkClass(active)}
               >
-                <Icon className={iconClass(active)} />
+                <Icon className={iconClass(active)} style={iconStyle(active)} />
                 <span className="truncate">{item.label}</span>
               </Link>
             );
@@ -320,7 +367,10 @@ export function AppSidebar() {
               onClick={() => setOpenPersist(false)}
               className={navLinkClass(activeView === "settings")}
             >
-              <IconCog className={iconClass(activeView === "settings")} />
+              <IconCog
+                className={iconClass(activeView === "settings")}
+                style={iconStyle(activeView === "settings")}
+              />
               <span className="truncate">Admin Settings</span>
             </Link>
           </div>

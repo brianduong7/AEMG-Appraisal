@@ -19,7 +19,10 @@ export function AppLogo({
     : "h-9 w-auto max-w-[140px]";
   const width = isLogin ? 520 : 140;
   const height = isLogin ? 96 : 36;
-  const src = isLogin ? "/logos/aife-login.png" : "/logos/aife.png";
+  // aife-navy.png is the newer, higher-resolution header mark (2026-08-17).
+  // The old aife.png is left in place, untouched, to revert instantly if needed
+  // — just swap this line back to "/logos/aife.png".
+  const src = isLogin ? "/logos/aife-login.png" : "/logos/aife-navy.png";
 
   const img = (
     <Image

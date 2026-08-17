@@ -6,6 +6,8 @@ import {
   type ReviewWindowSettings,
 } from "@/lib/types";
 import { viewSubtitle, viewTitle } from "@/lib/nav-roles";
+import { useSession } from "@/contexts/session-context";
+import { entityBrandColor, entityButtonStyle } from "@/lib/entity-theme";
 
 /** AEMG's cycle runs August -> August, not the calendar year - matches erpAppraisalCycleLabel in home-content.tsx/erpnext.ts. */
 function cycleSpanLabel(startYear: number): string {
@@ -18,12 +20,14 @@ function WindowRow({
   checked,
   busy,
   onChange,
+  brandColor,
 }: {
   label: string;
   description: string;
   checked: boolean;
   busy: boolean;
   onChange: (next: boolean) => void;
+  brandColor: string | null;
 }) {
   return (
     <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 last:border-b-0">
@@ -43,6 +47,7 @@ function WindowRow({
         className={`relative mt-0.5 h-6 w-11 shrink-0 rounded-full transition ${
           checked ? "bg-navy-900" : "bg-slate-200"
         } disabled:opacity-50`}
+        style={checked ? entityButtonStyle(brandColor) : undefined}
       >
         <span
           className={`absolute top-0.5 left-0.5 h-5 w-5 rounded-full bg-white shadow transition ${
@@ -56,6 +61,8 @@ function WindowRow({
 
 /** HR-only settings page body (rendered inside HomeContent when view=settings). */
 export function AdminSettingsPanel() {
+  const { user } = useSession();
+  const brandColor = entityBrandColor(user?.entity);
   const [windows, setWindows] = useState<ReviewWindowSettings>(
     DEFAULT_REVIEW_WINDOWS
   );
@@ -199,6 +206,7 @@ export function AdminSettingsPanel() {
                   disabled={cycleBusy}
                   onClick={() => void startNextCycle()}
                   className="rounded-lg bg-navy-900 px-3.5 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  style={entityButtonStyle(brandColor)}
                 >
                   {cycleBusy
                     ? "Starting…"
@@ -233,6 +241,7 @@ export function AdminSettingsPanel() {
               checked={windows.kpiSubmissionOpen}
               busy={busy}
               onChange={(v) => void patchWindow("kpiSubmissionOpen", v)}
+              brandColor={brandColor}
             />
             <WindowRow
               label="Mid-Year Review"
@@ -240,6 +249,7 @@ export function AdminSettingsPanel() {
               checked={windows.midYearReviewOpen}
               busy={busy}
               onChange={(v) => void patchWindow("midYearReviewOpen", v)}
+              brandColor={brandColor}
             />
             <WindowRow
               label="Annual Review"
@@ -247,6 +257,7 @@ export function AdminSettingsPanel() {
               checked={windows.annualReviewOpen}
               busy={busy}
               onChange={(v) => void patchWindow("annualReviewOpen", v)}
+              brandColor={brandColor}
             />
           </div>
           {error && (

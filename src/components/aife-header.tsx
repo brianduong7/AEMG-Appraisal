@@ -5,9 +5,16 @@ import { AppLogo } from "@/components/app-logo";
 import { HeaderNotificationsButton } from "@/components/header-notifications-button";
 import { useSession } from "@/contexts/session-context";
 import { navCapabilitiesForSession } from "@/lib/nav-roles";
+import {
+  entityBorderStyle,
+  entityBrandColor,
+  entityContrastTextClass,
+  entitySecondaryTextStyle,
+} from "@/lib/entity-theme";
 
 export function AifeHeader({ active }: { active: "list" | "detail" }) {
   const { user, logout, mode, managerProfile, hrProfile } = useSession();
+  const brandColor = entityBrandColor(user?.entity);
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
@@ -52,7 +59,10 @@ export function AifeHeader({ active }: { active: "list" | "detail" }) {
   }, [menuOpen]);
 
   return (
-    <header className="aife-header-gradient z-40 shrink-0 text-white">
+    <header
+      className={`aife-header-gradient z-40 shrink-0 text-white ${entityContrastTextClass(brandColor)}`}
+      style={brandColor ? { background: brandColor } : undefined}
+    >
       <div className="flex items-center gap-4 px-4 py-2.5 sm:px-6">
         <div className="flex min-w-0 shrink-0 items-center gap-3">
           <AppLogo variant="header" className="brightness-110" />
@@ -62,7 +72,12 @@ export function AifeHeader({ active }: { active: "list" | "detail" }) {
           >
             <span className="font-medium text-white/90">Performance</span>
             <span className="mx-1.5 text-white/30">/</span>
-            <span className="text-gold-300">Appraisal</span>
+            <span
+              className="text-gold-300"
+              style={entitySecondaryTextStyle(brandColor)}
+            >
+              Appraisal
+            </span>
             {active === "detail" && (
               <>
                 <span className="mx-1.5 text-white/30">/</span>
@@ -88,13 +103,28 @@ export function AifeHeader({ active }: { active: "list" | "detail" }) {
             {menuOpen && (
               <div
                 role="menu"
-                className="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-lg border border-white/10 bg-navy-900/95 py-1 text-sm text-white shadow-xl backdrop-blur-sm"
+                className={
+                  brandColor
+                    ? "absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-lg border bg-white py-1 text-sm text-slate-900 shadow-xl"
+                    : "absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-lg border border-white/10 bg-navy-900/95 py-1 text-sm text-white shadow-xl backdrop-blur-sm"
+                }
+                style={brandColor ? entityBorderStyle(brandColor) : undefined}
               >
-                <div className="border-b border-white/10 px-3.5 py-2.5">
-                  <p className="truncate font-medium text-white">
+                <div
+                  className={
+                    brandColor
+                      ? "border-b border-slate-200 px-3.5 py-2.5"
+                      : "border-b border-white/10 px-3.5 py-2.5"
+                  }
+                >
+                  <p
+                    className={`truncate font-medium ${brandColor ? "text-slate-900" : "text-white"}`}
+                  >
                     {displayName}
                   </p>
-                  <p className="truncate text-xs text-white/60">
+                  <p
+                    className={`truncate text-xs ${brandColor ? "text-slate-500" : "text-white/60"}`}
+                  >
                     {caps.roleLabel}
                   </p>
                 </div>
@@ -105,7 +135,11 @@ export function AifeHeader({ active }: { active: "list" | "detail" }) {
                     setMenuOpen(false);
                     logout();
                   }}
-                  className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-gold-300 transition hover:bg-white/10 hover:text-gold-200"
+                  className={
+                    brandColor
+                      ? "flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-slate-700 transition hover:bg-slate-50"
+                      : "flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-gold-300 transition hover:bg-white/10 hover:text-gold-200"
+                  }
                 >
                   <svg
                     className="h-4 w-4 shrink-0"
