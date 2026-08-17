@@ -35,12 +35,13 @@ const DEMO_MANAGER_EMAIL = "mark@aemg.demo";
 const DEMO_HR_EMAIL = "hr@aemg.demo";
 
 /**
- * Shared promotional video (same asset on all AIFE portal login pages).
- * Free stock clip — teacher with students in a classroom.
- * Source: https://www.pexels.com/video/7092235/ (Pexels license, no attribution required).
+ * AIFE's own event highlight reel, replacing the earlier Pexels stock clip.
+ * Served locally from /public rather than a third-party CDN. Re-encoded
+ * from the original 1080p/41MB source down to 720p/~11MB with ffmpeg -
+ * audio stripped (plays muted anyway) and bitrate reduced - the original
+ * was too heavy to autoplay on every login page visit.
  */
-const PROMO_VIDEO_URL =
-  "https://videos.pexels.com/video-files/7092235/7092235-hd_1920_1080_30fps.mp4";
+const PROMO_VIDEO_URL = "/videos/aife-event-highlight.mp4";
 
 function MailIcon({ className }: { className?: string }) {
   return (
