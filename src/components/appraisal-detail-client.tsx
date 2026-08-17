@@ -268,7 +268,7 @@ function AppraisalDetailInner({
    *  access to the admin tab's content is still gated by isHr further down. */
   initialTab: AppraisalTabId;
 }) {
-  const { user: sessionUser, mode } = useSession();
+  const { user: sessionUser, mode, isSso } = useSession();
   const { role, setRole } = useRole();
   const brandColor = entityBrandColor(sessionUser?.entity);
 
@@ -289,9 +289,18 @@ function AppraisalDetailInner({
 
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
-  const [employeeBanner, setEmployeeBanner] = useState(false);
+  /**
+   * Which employee-side submit just succeeded - kept distinct (not a plain
+   * boolean) so the confirmation banner can show the right phase-specific
+   * text. Previously a single shared boolean, so submitting mid-year or the
+   * annual self-rating both showed "KPIs submitted" (found in a real
+   * end-to-end rerun test 2026-08-17).
+   */
+  const [employeeBanner, setEmployeeBanner] = useState<
+    null | "kpi" | "midyear" | "annual"
+  >(null);
   const [managerBanner, setManagerBanner] = useState<
-    null | "saved" | "updated"
+    null | "kpi_approved" | "saved" | "updated"
   >(null);
   const [completeAppraisalDemoBanner, setCompleteAppraisalDemoBanner] =
     useState(false);
@@ -393,11 +402,13 @@ function AppraisalDetailInner({
   const [ratingLegendOpen, setRatingLegendOpen] = useState(false);
   const [nineBoxModalOpen, setNineBoxModalOpen] = useState(false);
 
-  const appraisalCycleYear = useMemo(() => new Date().getFullYear(), []);
-  const appraisalSeries = useMemo(
-    () => `HR-APR-.${appraisalCycleYear}.-`,
-    [appraisalCycleYear]
-  );
+  /**
+   * The record's OWN cycle, not the wall-clock year - this used to read
+   * `new Date().getFullYear()`, so the Overview tab showed "Annual 2026" on
+   * every appraisal regardless of which cycle it actually belongs to (bug
+   * found in a real-user rerun test 2026-08-17).
+   */
+  const appraisalCycleYear = appraisal.cycleYear;
 
   useEffect(() => {
     if (
@@ -558,7 +569,7 @@ function AppraisalDetailInner({
       setAppraisal(next);
       saveAppraisalBootstrap(next);
       if (action === "employee_submit") {
-        setEmployeeBanner(true);
+        setEmployeeBanner("kpi");
       }
     } catch {
       setFormError("Network error.");
@@ -586,7 +597,7 @@ function AppraisalDetailInner({
       const next = body as Appraisal;
       setAppraisal(next);
       saveAppraisalBootstrap(next);
-      setManagerBanner("saved");
+      setManagerBanner("kpi_approved");
     } catch {
       setFormError("Network error.");
     } finally {
@@ -742,7 +753,7 @@ function AppraisalDetailInner({
       setAppraisal(next);
       saveAppraisalBootstrap(next);
       if (action === "employee_midyear_submit") {
-        setEmployeeBanner(true);
+        setEmployeeBanner("midyear");
       }
     } catch {
       setFormError("Network error.");
@@ -790,7 +801,7 @@ function AppraisalDetailInner({
       setAppraisal(next);
       saveAppraisalBootstrap(next);
       if (action === "employee_annual_submit") {
-        setEmployeeBanner(true);
+        setEmployeeBanner("annual");
       }
     } catch {
       setFormError("Network error.");
@@ -950,6 +961,9 @@ function AppraisalDetailInner({
       mLevel: src.mLevel,
       managerName: src.managerName,
       entity: src.entity,
+      // Not stored per-appraisal (single-company org today) - see
+      // EmploymentProfile's doc comment in lib/mock-users.ts.
+      company: DEMO_COMPANY_NAME,
     };
     if (
       role === "employee" &&
@@ -1039,28 +1053,44 @@ function AppraisalDetailInner({
         ← Back to appraisals
       </Link>
 
-      {employeeBanner && (
+      {employeeBanner === "kpi" && (
         <div
           className="mb-6 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900"
           role="status"
         >
-          KPIs submitted. Your manager
-          {appraisal.reviewingManagerId ? (
-            <>
-              {" "}
-              (<strong>Mark Stevenson</strong>)
-            </>
-          ) : (
-            <>
-              {" "}
-              (<strong>{appraisal.managerName}</strong>)
-            </>
-          )}{" "}
+          KPIs submitted. Your manager (<strong>{appraisal.managerName}</strong>)
           and <strong>HR</strong> have been notified. Mid-year and annual
           ratings unlock next.
         </div>
       )}
+      {employeeBanner === "midyear" && (
+        <div
+          className="mb-6 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900"
+          role="status"
+        >
+          Mid-year review submitted. Your manager (
+          <strong>{appraisal.managerName}</strong>) will add comments next.
+        </div>
+      )}
+      {employeeBanner === "annual" && (
+        <div
+          className="mb-6 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900"
+          role="status"
+        >
+          Annual self-rating submitted. Your manager (
+          <strong>{appraisal.managerName}</strong>) will complete the annual
+          review next.
+        </div>
+      )}
 
+      {managerBanner === "kpi_approved" && (
+        <div
+          className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
+          role="status"
+        >
+          KPIs approved. Mid-Year Status is now <strong>KPI Approved</strong>.
+        </div>
+      )}
       {managerBanner === "saved" && (
         <div
           className="mb-6 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
@@ -1090,7 +1120,14 @@ function AppraisalDetailInner({
           edited by the employee or manager anymore.
         </div>
       )}
-      {skipLevelNotice && (
+      {/*
+       * Skip-level notification banner is demo-only - it names a hardcoded
+       * fake "one level above" manager (DEMO_SKIP_LEVEL_MANAGER), which
+       * would be actively wrong to claim for a real SSO user (found in a
+       * real end-to-end rerun test 2026-08-17; real skip-level notification
+       * isn't wired up yet). Never shown for a real signed-in user.
+       */}
+      {skipLevelNotice && !isSso && (
         <div
           className="mb-6 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900"
           role="status"
@@ -2027,13 +2064,8 @@ function AppraisalDetailInner({
                 </h2>
                 <div className="grid gap-5 sm:grid-cols-2">
                   <HrReadonlyField
-                    label="Series"
-                    value={appraisalSeries}
-                    required
-                  />
-                  <HrReadonlyField
                     label="Company"
-                    value={DEMO_COMPANY_NAME}
+                    value={identity.company}
                     required
                   />
                   <HrReadonlyField

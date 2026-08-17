@@ -68,8 +68,7 @@ export function buildDemoSubmittedEmmaForMark(): Appraisal {
       },
     ],
     capabilities,
-    employeeComments:
-      "Demo submission (pre-loaded): KPIs submitted — Mid-Year Status is KPI Created. Manager can Approve KPIs.",
+    employeeComments: "",
     managerComments: "",
     managerOverallOverride: null,
   });

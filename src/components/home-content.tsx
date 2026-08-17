@@ -638,7 +638,11 @@ export function HomeContent() {
                       </td>
                       <td className="px-4 py-3.5">
                         <CycleStatusPill
-                          status={annualCycleStatus(a.status, a.midYearStatus)}
+                          status={annualCycleStatus(
+                            a.status,
+                            a.midYearStatus,
+                            a.kpis
+                          )}
                         />
                       </td>
                       <td className="px-4 py-3.5 text-slate-600">
