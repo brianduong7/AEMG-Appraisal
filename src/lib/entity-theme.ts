@@ -91,3 +91,17 @@ export function entityButtonStyle(
     ? { backgroundColor: brandColor, color: "#1f2328" }
     : undefined;
 }
+
+/** Inline style for gold accent text (section titles, active-tab labels) when a brand color is active. */
+export function entityTextStyle(
+  brandColor: string | null
+): { color: string } | undefined {
+  return brandColor ? { color: brandColor } : undefined;
+}
+
+/** Inline style for gold accent borders (active tab underline, accent cards) when a brand color is active. */
+export function entityBorderStyle(
+  brandColor: string | null
+): { borderColor: string } | undefined {
+  return brandColor ? { borderColor: brandColor } : undefined;
+}

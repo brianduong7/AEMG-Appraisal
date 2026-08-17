@@ -21,7 +21,12 @@ import {
 } from "@/lib/types";
 import { AppShell } from "@/components/app-shell";
 import { cloneAppraisal } from "@/lib/clone-appraisal";
-import { entityBrandColor, entityButtonStyle } from "@/lib/entity-theme";
+import {
+  entityBrandColor,
+  entityBorderStyle,
+  entityButtonStyle,
+  entityTextStyle,
+} from "@/lib/entity-theme";
 import {
   DEMO_COMPANY_NAME,
   DEMO_HR,
@@ -102,7 +107,7 @@ const REVIEW_CYCLE_SUBLABEL =
 const REVIEW_CYCLE_SECTION_TITLE =
   "mb-2 text-[10px] font-semibold uppercase tracking-wide";
 const REVIEW_CYCLE_VALUE =
-  "min-h-7 text-sm leading-snug text-navy-950";
+  "min-h-7 text-sm leading-snug text-slate-900";
 
 type AppraisalTabId =
   | (typeof APPRAISAL_TABS)[number][0]
@@ -1029,14 +1034,14 @@ function AppraisalDetailInner({
               ? "/?view=team"
               : "/?view=my"
         }
-        className="mb-6 inline-block text-sm font-medium text-navy-600 hover:text-navy-800"
+        className="mb-6 inline-block text-sm font-medium text-slate-600 hover:text-slate-700"
       >
         ← Back to appraisals
       </Link>
 
       {employeeBanner && (
         <div
-          className="mb-6 rounded-lg border border-navy-200 bg-navy-50 px-4 py-3 text-sm text-navy-900"
+          className="mb-6 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900"
           role="status"
         >
           KPIs submitted. Your manager
@@ -1087,7 +1092,7 @@ function AppraisalDetailInner({
       )}
       {skipLevelNotice && (
         <div
-          className="mb-6 rounded-lg border border-navy-200 bg-navy-50 px-4 py-3 text-sm text-navy-950"
+          className="mb-6 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-slate-900"
           role="status"
         >
           <strong>Demo notifications sent</strong> to the direct manager and one
@@ -1099,7 +1104,7 @@ function AppraisalDetailInner({
 
       {midYearBanner === "saved" && (
         <div
-          className="mb-6 rounded-lg border border-gold-300 bg-gold-50 px-4 py-3 text-sm text-navy-900"
+          className="mb-6 rounded-lg border border-gold-300 bg-gold-50 px-4 py-3 text-sm text-slate-900"
           role="status"
         >
           Mid-year checkpoint saved as <strong>draft</strong>. Submit it when
@@ -1119,7 +1124,7 @@ function AppraisalDetailInner({
       <div className="mb-6 flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2 gap-y-1.5">
-            <h1 className="text-xl font-semibold tracking-tight text-navy-950 sm:text-2xl">
+            <h1 className="text-xl font-semibold tracking-tight text-slate-900 sm:text-2xl">
               Appraisal
             </h1>
             <span className="text-xs text-slate-500">
@@ -1127,10 +1132,6 @@ function AppraisalDetailInner({
               {identity.englishName || identity.employeeName}
             </span>
           </div>
-          <p className="mt-1 text-xs text-zinc-500">
-            Overview fields come from your F3 / HR account setup and are read-only
-            here.
-          </p>
           {mode === "employee" && employeeReadOnlyEmployee && (
             <p className="mt-2 text-sm text-zinc-600">
               <strong>View only</strong> — your manager has finalized this
@@ -1192,7 +1193,7 @@ function AppraisalDetailInner({
               <button
                 type="button"
                 disabled={busy}
-                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-navy-950 shadow-sm transition hover:border-navy-300 disabled:opacity-50"
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition hover:border-slate-300 disabled:opacity-50"
                 onClick={() => saveEmployee("employee_save")}
               >
                 Save
@@ -1235,7 +1236,7 @@ function AppraisalDetailInner({
               <button
                 type="button"
                 disabled={busy}
-                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-navy-950 shadow-sm transition hover:border-navy-300 disabled:opacity-50"
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition hover:border-slate-300 disabled:opacity-50"
                 onClick={() => saveEmployeeMidYear("employee_midyear_save")}
               >
                 Save
@@ -1261,7 +1262,7 @@ function AppraisalDetailInner({
               <button
                 type="button"
                 disabled={busy}
-                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-navy-950 shadow-sm transition hover:border-navy-300 disabled:opacity-50"
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition hover:border-slate-300 disabled:opacity-50"
                 onClick={() => saveEmployeeAnnual("employee_annual_save")}
               >
                 Save
@@ -1287,7 +1288,7 @@ function AppraisalDetailInner({
               <button
                 type="button"
                 disabled={busy}
-                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-navy-950 shadow-sm transition hover:border-navy-300 disabled:opacity-50"
+                className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition hover:border-slate-300 disabled:opacity-50"
                 onClick={() => void saveMidYear("manager_midyear_save")}
               >
                 Save mid-year
@@ -1310,6 +1311,7 @@ function AppraisalDetailInner({
                   type="button"
                   disabled={busy}
                   className="rounded-lg bg-gold-600 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-gold-600/25 transition hover:bg-gold-700 disabled:opacity-50"
+                  style={entityButtonStyle(brandColor)}
                   onClick={() => void completeAppraisalToHr()}
                 >
                   Complete Appraisal
@@ -1325,7 +1327,7 @@ function AppraisalDetailInner({
                 }
                 className={
                   appraisal.status === "reviewed"
-                    ? "rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-navy-950 shadow-sm transition hover:border-navy-300 disabled:opacity-50"
+                    ? "rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition hover:border-slate-300 disabled:opacity-50"
                     : "rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:bg-navy-800 disabled:opacity-50"
                 }
                 style={
@@ -1354,9 +1356,16 @@ function AppraisalDetailInner({
                 onClick={() => setActiveTab(id)}
                 className={`relative border-b-2 px-4 py-2.5 text-sm font-medium transition ${
                   activeTab === id
-                    ? "border-gold-500 text-navy-900"
-                    : "border-transparent text-slate-500 hover:text-navy-800"
+                    ? "border-gold-500 text-slate-900"
+                    : "border-transparent text-slate-500 hover:text-slate-700"
                 } ${id === "admin" ? "font-semibold text-gold-700" : ""}`}
+                style={
+                  activeTab === id
+                    ? entityBorderStyle(brandColor)
+                    : id === "admin"
+                      ? entityTextStyle(brandColor)
+                      : undefined
+                }
               >
                 {label}
               </button>
@@ -1442,6 +1451,7 @@ function AppraisalDetailInner({
                               <div className="bg-gold-50/50 px-2.5 py-2.5">
                                 <p
                                   className={`${REVIEW_CYCLE_SECTION_TITLE} text-gold-700`}
+                                  style={entityTextStyle(brandColor)}
                                 >
                                   Mid-Year
                                 </p>
@@ -1476,9 +1486,9 @@ function AppraisalDetailInner({
                                 </div>
                               </div>
                               {showAnnualReview && (
-                              <div className="bg-navy-50/40 px-2.5 py-2.5">
+                              <div className="bg-slate-50/40 px-2.5 py-2.5">
                                 <p
-                                  className={`${REVIEW_CYCLE_SECTION_TITLE} text-navy-800`}
+                                  className={`${REVIEW_CYCLE_SECTION_TITLE} text-slate-700`}
                                 >
                                   Annual
                                   {(employeeAnnualEditable || managerCanReview) && (
@@ -1557,7 +1567,7 @@ function AppraisalDetailInner({
               </div>
               {showEmployeeSelfRating && (
               <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
-                <h3 className="text-sm font-semibold text-navy-950">
+                <h3 className="text-sm font-semibold text-slate-900">
                   Capability ratings summary
                 </h3>
                 <dl className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -1565,7 +1575,7 @@ function AppraisalDetailInner({
                     <dt className="text-xs font-medium text-slate-500">
                       Employee Self Rating
                     </dt>
-                    <dd className="mt-1 text-sm font-semibold text-navy-950">
+                    <dd className="mt-1 text-sm font-semibold text-slate-900">
                       {capSelfAvg != null
                         ? ratingLabel(
                             Math.min(5, Math.max(1, Math.round(capSelfAvg)))
@@ -1577,7 +1587,7 @@ function AppraisalDetailInner({
                     <dt className="text-xs font-medium text-slate-500">
                       Manager Rating
                     </dt>
-                    <dd className="mt-1 text-sm font-semibold text-navy-950">
+                    <dd className="mt-1 text-sm font-semibold text-slate-900">
                       {(isManager || appraisal.status !== "draft") &&
                       capMgrAvg != null
                         ? ratingLabel(
@@ -1770,6 +1780,7 @@ function AppraisalDetailInner({
                               <div className="bg-gold-50/50 px-2.5 py-2.5">
                                 <p
                                   className={`${REVIEW_CYCLE_SECTION_TITLE} text-gold-700`}
+                                  style={entityTextStyle(brandColor)}
                                 >
                                   Mid-Year
                                   {(employeeMidYearEditable ||
@@ -1849,9 +1860,9 @@ function AppraisalDetailInner({
                                 </div>
                               </div>
                               {showAnnualReview && (
-                              <div className="bg-navy-50/40 px-2.5 py-2.5">
+                              <div className="bg-slate-50/40 px-2.5 py-2.5">
                                 <p
-                                  className={`${REVIEW_CYCLE_SECTION_TITLE} text-navy-800`}
+                                  className={`${REVIEW_CYCLE_SECTION_TITLE} text-slate-700`}
                                 >
                                   Annual
                                   {(employeeAnnualEditable || managerCanReview) && (
@@ -1961,7 +1972,7 @@ function AppraisalDetailInner({
               )}
               {showKpiRatingsSummary && (
               <div className="mt-5 rounded-xl border border-slate-200 bg-slate-50/70 p-4">
-                <h3 className="text-sm font-semibold text-navy-950">
+                <h3 className="text-sm font-semibold text-slate-900">
                   KPI ratings summary
                 </h3>
                 <dl className="mt-3 grid gap-3 sm:grid-cols-2">
@@ -1969,7 +1980,7 @@ function AppraisalDetailInner({
                     <dt className="text-xs font-medium text-slate-500">
                       Employee Self Rating
                     </dt>
-                    <dd className="mt-1 text-sm font-semibold text-navy-950">
+                    <dd className="mt-1 text-sm font-semibold text-slate-900">
                       {kpiSelfScore != null
                         ? ratingLabel(
                             Math.min(5, Math.max(1, Math.round(kpiSelfScore)))
@@ -1981,7 +1992,7 @@ function AppraisalDetailInner({
                     <dt className="text-xs font-medium text-slate-500">
                       Manager Rating
                     </dt>
-                    <dd className="mt-1 text-sm font-semibold text-navy-950">
+                    <dd className="mt-1 text-sm font-semibold text-slate-900">
                       {(isManager || appraisal.status !== "draft") &&
                       kpiMgrScore != null
                         ? ratingLabel(
@@ -2306,7 +2317,10 @@ function AppraisalDetailInner({
             )}
 
             {activeTab === "admin" && isHr && hrDraft && (
-              <div className="rounded-xl border border-gold-300/70 bg-white p-6 shadow-sm">
+              <div
+                className="rounded-xl border border-gold-300/70 bg-white p-6 shadow-sm"
+                style={entityBorderStyle(brandColor)}
+              >
                 <section className="space-y-6">
                   <div className="flex flex-wrap items-start justify-between gap-3">
                     <div>
@@ -2647,7 +2661,7 @@ function AppraisalDetailInner({
                         setHrSuccess(false);
                         setHrEditing(false);
                       }}
-                      className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-navy-950 shadow-sm transition hover:border-navy-300 disabled:opacity-50"
+                      className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-900 shadow-sm transition hover:border-slate-300 disabled:opacity-50"
                     >
                       Cancel
                     </button>
@@ -2801,12 +2815,12 @@ function FeedbackSection({
         type="button"
         onClick={toggle}
         aria-expanded={open}
-        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-navy-50/40"
+        className="flex w-full items-center justify-between gap-3 px-4 py-3 text-left hover:bg-slate-50/40"
       >
         <div className="min-w-0">
-          <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-navy-950">
+          <p className="flex flex-wrap items-center gap-2 text-sm font-semibold text-slate-900">
             Feedback
-            <span className="rounded-full border border-navy-200 bg-navy-50 px-2 py-0.5 text-[11px] font-medium text-navy-800">
+            <span className="rounded-full border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] font-medium text-slate-700">
               Visible to direct manager &amp; HR only
             </span>
           </p>
@@ -2864,7 +2878,7 @@ function FeedbackSection({
               onSubmit={handleCreate}
               className="mb-4 rounded-lg border border-slate-200 bg-slate-50/80 px-3.5 py-3"
             >
-              <p className="text-sm font-medium text-navy-950">
+              <p className="text-sm font-medium text-slate-900">
                 Request feedback
               </p>
               <div className="mt-3 grid gap-3 sm:grid-cols-3">
@@ -2877,7 +2891,7 @@ function FeedbackSection({
                     value={reviewerName}
                     onChange={(e) => setReviewerName(e.target.value)}
                     placeholder="Sarah Chen"
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-950 outline-none focus:border-slate-400"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400"
                   />
                 </label>
                 <label className="block">
@@ -2888,7 +2902,7 @@ function FeedbackSection({
                     value={reviewerRole}
                     onChange={(e) => setReviewerRole(e.target.value)}
                     placeholder="Branch Manager"
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-950 outline-none focus:border-slate-400"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400"
                   />
                 </label>
                 <label className="block">
@@ -2899,7 +2913,7 @@ function FeedbackSection({
                     value={reviewerBranch}
                     onChange={(e) => setReviewerBranch(e.target.value)}
                     placeholder="AFE — Melbourne"
-                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-navy-950 outline-none focus:border-slate-400"
+                    className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 outline-none focus:border-slate-400"
                   />
                 </label>
               </div>
@@ -2926,7 +2940,7 @@ function FeedbackSection({
                     setFormOpen(false);
                     setCreateError(null);
                   }}
-                  className="text-sm font-medium text-slate-600 hover:text-navy-950"
+                  className="text-sm font-medium text-slate-600 hover:text-slate-900"
                 >
                   Cancel
                 </button>
@@ -2939,7 +2953,7 @@ function FeedbackSection({
                 setFormOpen(true);
                 setNewLink(null);
               }}
-              className="mb-4 rounded-lg border border-navy-200 bg-white px-3.5 py-2 text-sm font-medium text-navy-900 hover:bg-navy-50"
+              className="mb-4 rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-medium text-slate-900 hover:bg-slate-50"
             >
               + Request feedback
             </button>
@@ -2974,7 +2988,7 @@ function FeedbackSection({
                   className="rounded-lg border border-slate-100 bg-slate-50/80 px-3.5 py-3"
                 >
                   <div className="flex flex-wrap items-baseline justify-between gap-2">
-                    <p className="text-sm font-medium text-navy-950">
+                    <p className="text-sm font-medium text-slate-900">
                       {item.reviewerBranch || item.reviewerName}
                     </p>
                     <div className="flex items-center gap-2">
@@ -3005,7 +3019,7 @@ function FeedbackSection({
                   </p>
                   {item.status === "Submitted" ? (
                     <>
-                      <p className="mt-2 text-sm leading-relaxed text-navy-950/90">
+                      <p className="mt-2 text-sm leading-relaxed text-slate-900/90">
                         {item.comment}
                       </p>
                       {item.submittedOn && (
@@ -3039,7 +3053,7 @@ function MidYearRatingBadge({ rating }: { rating: MidYearRating | null }) {
   const tone: Record<MidYearRating, string> = {
     on_track: "text-emerald-800",
     not_on_track: "text-red-700",
-    early_access: "text-navy-800",
+    early_access: "text-slate-700",
   };
   return (
     <span className={`text-sm font-medium ${tone[rating]}`}>
@@ -3077,7 +3091,7 @@ function TabStepNav({
           onClick={() => onTabChange(prev[0])}
           title={`Go to ${prev[1]}`}
           aria-label={`Go to ${prev[1]}`}
-          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300 bg-white text-sm font-medium text-navy-950 shadow-sm transition hover:border-navy-300"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-300 bg-white text-sm font-medium text-slate-900 shadow-sm transition hover:border-slate-300"
         >
           ←
         </button>

@@ -761,7 +761,7 @@ export function HomeContent() {
 
               <span className="inline-flex items-center gap-1.5">
                 <span className="h-1 w-5 rounded-full bg-gold-500" aria-hidden />
-                AIFE Performance
+                Performance
               </span>
             </div>
           )}
