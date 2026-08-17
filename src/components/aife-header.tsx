@@ -5,7 +5,7 @@ import { AppLogo } from "@/components/app-logo";
 import { HeaderNotificationsButton } from "@/components/header-notifications-button";
 import { useSession } from "@/contexts/session-context";
 import { navCapabilitiesForSession } from "@/lib/nav-roles";
-import { entityBrandColor } from "@/lib/entity-theme";
+import { entityBorderStyle, entityBrandColor } from "@/lib/entity-theme";
 
 export function AifeHeader({ active }: { active: "list" | "detail" }) {
   const { user, logout, mode, managerProfile, hrProfile } = useSession();
@@ -93,13 +93,28 @@ export function AifeHeader({ active }: { active: "list" | "detail" }) {
             {menuOpen && (
               <div
                 role="menu"
-                className="absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-lg border border-white/10 bg-navy-900/95 py-1 text-sm text-white shadow-xl backdrop-blur-sm"
+                className={
+                  brandColor
+                    ? "absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-lg border bg-white py-1 text-sm text-slate-900 shadow-xl"
+                    : "absolute right-0 z-50 mt-2 w-56 overflow-hidden rounded-lg border border-white/10 bg-navy-900/95 py-1 text-sm text-white shadow-xl backdrop-blur-sm"
+                }
+                style={brandColor ? entityBorderStyle(brandColor) : undefined}
               >
-                <div className="border-b border-white/10 px-3.5 py-2.5">
-                  <p className="truncate font-medium text-white">
+                <div
+                  className={
+                    brandColor
+                      ? "border-b border-slate-200 px-3.5 py-2.5"
+                      : "border-b border-white/10 px-3.5 py-2.5"
+                  }
+                >
+                  <p
+                    className={`truncate font-medium ${brandColor ? "text-slate-900" : "text-white"}`}
+                  >
                     {displayName}
                   </p>
-                  <p className="truncate text-xs text-white/60">
+                  <p
+                    className={`truncate text-xs ${brandColor ? "text-slate-500" : "text-white/60"}`}
+                  >
                     {caps.roleLabel}
                   </p>
                 </div>
@@ -110,7 +125,11 @@ export function AifeHeader({ active }: { active: "list" | "detail" }) {
                     setMenuOpen(false);
                     logout();
                   }}
-                  className="flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-gold-300 transition hover:bg-white/10 hover:text-gold-200"
+                  className={
+                    brandColor
+                      ? "flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-slate-700 transition hover:bg-slate-50"
+                      : "flex w-full items-center gap-2.5 px-3.5 py-2.5 text-left text-gold-300 transition hover:bg-white/10 hover:text-gold-200"
+                  }
                 >
                   <svg
                     className="h-4 w-4 shrink-0"
