@@ -26,6 +26,7 @@ export type ErpnextIdentity = {
   userId: string | null;
   reportsTo: string | null;
   managerName: string | null;
+  company: string | null;
   mLevel: number | null;
   entity: string | null;
   /** Somebody actively reports to them (live org chart, not a snapshot). */
@@ -43,6 +44,7 @@ type RawIdentity = {
   user_id?: string | null;
   reports_to?: string | null;
   manager_name?: string | null;
+  company?: string | null;
   m_level?: number | null;
   entity?: string | null;
   is_manager?: boolean;
@@ -80,6 +82,7 @@ export async function resolveErpnextIdentity(
     userId: d.user_id ?? null,
     reportsTo: d.reports_to ?? null,
     managerName: d.manager_name ?? null,
+    company: d.company ?? null,
     mLevel: typeof d.m_level === "number" ? d.m_level : null,
     entity: d.entity ?? null,
     isManager: Boolean(d.is_manager),

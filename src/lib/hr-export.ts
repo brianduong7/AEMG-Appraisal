@@ -108,7 +108,8 @@ export function downloadHrAppraisalReport(
       M_LEVEL_LABELS[level] ?? `L${level}`,
       a.managerName || "",
       CYCLE_STATUS_LABELS[a.midYearStatus] ?? a.midYearStatus,
-      CYCLE_STATUS_LABELS[annualCycleStatus(a.status, a.midYearStatus)] ?? "",
+      CYCLE_STATUS_LABELS[annualCycleStatus(a.status, a.midYearStatus, a.kpis)] ??
+        "",
       a.status,
       mgr.numeric,
       mgr.label,

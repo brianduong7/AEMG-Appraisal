@@ -11,6 +11,7 @@ export type MockUser = {
   /** Full name of the line manager. */
   managerName: string;
   entity: string;
+  company: string;
 };
 
 /** Demo directory — matches appraisal `ownerUserId`. */
@@ -24,6 +25,7 @@ export const MOCK_USERS: MockUser[] = [
     mLevel: 4,
     managerName: "Mark Stevenson",
     entity: "HQ Corporate Services",
+    company: "AEMG EDUCATION",
   },
   {
     id: "mark",
@@ -34,6 +36,7 @@ export const MOCK_USERS: MockUser[] = [
     mLevel: 6,
     managerName: "David Park",
     entity: "HQ Corporate Services",
+    company: "AEMG EDUCATION",
   },
   {
     id: "john",
@@ -44,6 +47,7 @@ export const MOCK_USERS: MockUser[] = [
     mLevel: 3,
     managerName: "Mark Stevenson",
     entity: "AFE",
+    company: "AEMG EDUCATION",
   },
   {
     id: "hr",
@@ -54,6 +58,7 @@ export const MOCK_USERS: MockUser[] = [
     mLevel: 5,
     managerName: "David Park",
     entity: "HQ Corporate Services",
+    company: "AEMG EDUCATION",
   },
 ];
 
@@ -82,6 +87,12 @@ export const DEMO_SKIP_LEVEL_MANAGER = {
   role: "Department Director",
 } as const;
 
+/**
+ * `company` is not on `Appraisal` itself — it's the same single value across
+ * the whole org today (see identity.py's resolve_user), so it isn't worth
+ * snapshotting per-record like entity/mLevel/etc. It's carried alongside the
+ * Appraisal-derived fields purely for Overview display.
+ */
 export type EmploymentProfile = Pick<
   Appraisal,
   | "employeeName"
@@ -91,7 +102,7 @@ export type EmploymentProfile = Pick<
   | "mLevel"
   | "managerName"
   | "entity"
->;
+> & { company: string };
 
 export function employmentProfileFromUser(u: MockUser): EmploymentProfile {
   return {
@@ -102,6 +113,7 @@ export function employmentProfileFromUser(u: MockUser): EmploymentProfile {
     mLevel: u.mLevel,
     managerName: u.managerName,
     entity: u.entity,
+    company: u.company,
   };
 }
 

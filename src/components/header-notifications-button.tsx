@@ -38,6 +38,7 @@ export function HeaderNotificationsButton() {
   const { mode, managerProfile, hrProfile } = useSession();
   const [open, setOpen] = useState(false);
   const [items, setItems] = useState<ManagerNotification[]>([]);
+  const [error, setError] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   const recipientId =
@@ -50,14 +51,23 @@ export function HeaderNotificationsButton() {
   const refresh = useCallback(async () => {
     if (!recipientId) {
       setItems([]);
+      setError(false);
       return;
     }
-    const res = await fetch(
-      `/api/notifications?managerId=${encodeURIComponent(recipientId)}`
-    );
-    if (!res.ok) return;
-    const data = (await res.json()) as ManagerNotification[];
-    setItems(data);
+    try {
+      const res = await fetch(
+        `/api/notifications?managerId=${encodeURIComponent(recipientId)}`
+      );
+      if (!res.ok) {
+        setError(true);
+        return;
+      }
+      const data = (await res.json()) as ManagerNotification[];
+      setItems(data);
+      setError(false);
+    } catch {
+      setError(true);
+    }
   }, [recipientId]);
 
   useEffect(() => {
@@ -118,7 +128,12 @@ export function HeaderNotificationsButton() {
               updates.
             </p>
           )}
-          {canReceive && count === 0 && (
+          {canReceive && error && (
+            <p className="px-3 py-4 text-sm text-red-600">
+              Couldn&apos;t load notifications. Try again shortly.
+            </p>
+          )}
+          {canReceive && !error && count === 0 && (
             <p className="px-3 py-4 text-sm text-zinc-600">
               No pending notifications right now.
             </p>

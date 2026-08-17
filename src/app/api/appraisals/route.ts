@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { createAppraisal, readAppraisals } from "@/lib/appraisal-store";
-import { findMockUser } from "@/lib/mock-users";
+import { DEMO_COMPANY_NAME, findMockUser } from "@/lib/mock-users";
 
 export async function GET() {
   const appraisals = await readAppraisals();
@@ -58,6 +58,7 @@ export async function POST(request: Request) {
           mLevel: identity.mLevel ?? 3,
           managerName: identity.managerName ?? "",
           entity: identity.entity ?? "",
+          company: identity.company ?? DEMO_COMPANY_NAME,
         },
         // Their real line manager from ERPNext, as an Employee id - the same
         // shape the manager-side team filter compares against, so an SSO

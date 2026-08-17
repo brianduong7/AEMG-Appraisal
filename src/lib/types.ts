@@ -42,10 +42,25 @@ export const CYCLE_STATUS_LABELS: Record<CycleStatus, string> = {
   completed: "Completed",
 };
 
-/** Annual workflow status → reporting cycle status (HR two-column report). */
+/**
+ * Annual workflow status → reporting cycle status (HR two-column report).
+ *
+ * `status` is the appraisal's single top-level lifecycle field
+ * (draft → submitted → reviewed → completed) - but it moves to "submitted"
+ * at the very first employee KPI submit, at the START of the year, and
+ * never changes again until the MANAGER'S annual review. It carries no
+ * signal at all about whether the employee has actually done their annual
+ * self-rating yet. Without checking `kpis`, this returned "submitted" for
+ * the Annual column the instant mid-year completed, even for an employee
+ * who hadn't opened the Annual tab - found in a real end-to-end rerun test
+ * 2026-08-17. The one reliable signal that annual self-rating happened is
+ * every KPI having a `selfRating` - the employee_annual_submit endpoint
+ * requires exactly that before it accepts the submission.
+ */
 export function annualCycleStatus(
   status: AppraisalStatus,
-  midYearStatus?: CycleStatus
+  midYearStatus: CycleStatus | undefined,
+  kpis: Pick<KpiRow, "selfRating">[]
 ): CycleStatus {
   if (status === "draft") return "draft";
   if (status === "completed") return "completed";
@@ -59,6 +74,9 @@ export function annualCycleStatus(
   ) {
     return "draft";
   }
+  const employeeAnnualSubmitted =
+    kpis.length > 0 && kpis.every((k) => k.selfRating != null);
+  if (!employeeAnnualSubmitted) return "draft";
   if (status === "submitted" || status === "reviewed") return "submitted";
   return "completed";
 }

@@ -10,6 +10,7 @@ import {
 } from "react";
 import { signOut as ssoSignOut } from "next-auth/react";
 import {
+  DEMO_COMPANY_NAME,
   DEMO_HR,
   DEMO_MANAGER,
   findMockUser,
@@ -33,6 +34,7 @@ type SsoIdentity = {
   designation: string | null;
   department: string | null;
   managerName: string | null;
+  company: string | null;
   mLevel: number | null;
   entity: string | null;
   isManager: boolean;
@@ -58,6 +60,7 @@ function mockUserFromIdentity(identity: SsoIdentity): MockUser {
     mLevel: identity.mLevel ?? 3,
     managerName: identity.managerName ?? "",
     entity: identity.entity ?? "",
+    company: identity.company ?? DEMO_COMPANY_NAME,
   };
 }
 
