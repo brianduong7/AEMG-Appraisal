@@ -5,7 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Appraisal, CycleStatus } from "@/lib/types";
 import { annualCycleStatus, CYCLE_STATUS_LABELS } from "@/lib/types";
-import { appraisalListDisplayName } from "@/lib/entity-theme";
+import { appraisalListDisplayName, entityBrandColor } from "@/lib/entity-theme";
 import { DEMO_HR } from "@/lib/mock-users";
 import { useRole } from "@/contexts/role-context";
 import { useSession } from "@/contexts/session-context";
@@ -94,6 +94,7 @@ type ManagerNotification = {
 export function HomeContent() {
   const router = useRouter();
   const { user, mode, managerProfile, hrProfile } = useSession();
+  const brandColor = entityBrandColor(user?.entity);
   const { setRole } = useRole();
   const searchParams = useSearchParams();
   const notice = searchParams.get("notice");
@@ -317,7 +318,10 @@ export function HomeContent() {
   return (
     <AppShell active="list">
       {/* Hero strip */}
-      <div className="aife-hero-gradient text-white">
+      <div
+        className="aife-hero-gradient text-white"
+        style={brandColor ? { background: brandColor } : undefined}
+      >
         <div className="mx-auto max-w-[1500px] px-4 pb-8 pt-7 sm:px-6">
           <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gold-400">
             {erpAppraisalCycleLabel(cycleYear)}

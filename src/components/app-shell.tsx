@@ -7,6 +7,10 @@ import { AppSidebar } from "@/components/app-sidebar";
 /**
  * Top bar + main content. Sidebar is a full-height left slide-out drawer
  * (fixed overlay), toggled by the edge pop-out arrow.
+ *
+ * Brand-entity recoloring (AOSC/Cloudcampus/W&E Health) happens inside
+ * AifeHeader and AppSidebar directly, on the actual navy surfaces - see
+ * entity-theme.ts's entityBrandColor().
  */
 export function AppShell({
   children,

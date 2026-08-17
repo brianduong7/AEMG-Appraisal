@@ -10,6 +10,7 @@ import {
   parseAppraisalView,
   type AppraisalNavView,
 } from "@/lib/nav-roles";
+import { entityBrandColor } from "@/lib/entity-theme";
 
 const SIDEBAR_KEY = "aife-sidebar-open";
 
@@ -109,6 +110,7 @@ export function AppSidebar() {
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const { mode, user, managerProfile, hrProfile } = useSession();
+  const brandColor = entityBrandColor(user?.entity);
   const [open, setOpen] = useState(true);
   const [ready, setReady] = useState(false);
 
@@ -213,6 +215,7 @@ export function AppSidebar() {
           type="button"
           onClick={toggle}
           className="fixed left-0 top-1/2 z-50 flex h-14 w-8 -translate-y-1/2 items-center justify-center rounded-r-lg border border-l-0 border-navy-800 bg-navy-900 text-gold-400 shadow-lg shadow-navy-900/40 transition hover:w-9 hover:bg-navy-800 hover:text-gold-300"
+          style={brandColor ? { background: brandColor } : undefined}
           title="Open appraisal menu"
           aria-label="Open appraisal menu"
           aria-expanded={false}
@@ -239,6 +242,7 @@ export function AppSidebar() {
         className={`fixed inset-y-0 left-0 z-50 flex w-64 flex-col bg-navy-900 text-white shadow-2xl shadow-navy-900/50 transition-transform duration-300 ease-out ${
           open ? "translate-x-0" : "-translate-x-full"
         }`}
+        style={brandColor ? { background: brandColor } : undefined}
         aria-label="Appraisal navigation"
         aria-hidden={!open}
       >
@@ -256,6 +260,7 @@ export function AppSidebar() {
           type="button"
           onClick={toggle}
           className="absolute top-1/2 -right-7 flex h-14 w-7 -translate-y-1/2 items-center justify-center rounded-r-lg border border-l-0 border-navy-800 bg-navy-900 text-gold-400 shadow-md transition hover:bg-navy-800 hover:text-gold-300"
+          style={brandColor ? { background: brandColor } : undefined}
           title="Close menu"
           aria-label="Close appraisal menu"
           aria-expanded={true}
