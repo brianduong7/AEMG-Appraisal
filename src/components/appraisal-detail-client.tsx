@@ -368,10 +368,18 @@ function AppraisalDetailInner({
   const [hrSaving, setHrSaving] = useState(false);
   const [hrError, setHrError] = useState<string | null>(null);
   const [hrSuccess, setHrSuccess] = useState(false);
+  /**
+   * HR Admin opens read-only - full override with no confirmation step is
+   * an easy way to fat-finger a real employee's record. Fields only become
+   * editable after HR explicitly clicks "Edit", and leaving edit mode
+   * (Cancel, or a successful Save) locks them again.
+   */
+  const [hrEditing, setHrEditing] = useState(false);
   useEffect(() => {
     setHrDraft(role === "hr" ? cloneAppraisal(appraisal) : null);
     setHrError(null);
     setHrSuccess(false);
+    setHrEditing(false);
   }, [appraisal, role]);
 
   const [activeTab, setActiveTab] = useState<AppraisalTabId>(initialTab);
@@ -687,6 +695,7 @@ function AppraisalDetailInner({
       setAppraisal(next);
       saveAppraisalBootstrap(next);
       setHrSuccess(true);
+      setHrEditing(false);
     } catch {
       setHrError("Network error.");
     } finally {
@@ -1986,7 +1995,7 @@ function AppraisalDetailInner({
             </section>
                 </div>
               </>
-            ) : (
+            ) : activeTab === "admin" ? null : (
             <div className="rounded-xl border border-zinc-200/80 bg-white p-6 shadow-sm">
             {activeTab === "overview" && (
               <div>
@@ -2287,16 +2296,37 @@ function AppraisalDetailInner({
             {activeTab === "admin" && isHr && hrDraft && (
               <div className="rounded-xl border border-gold-300/70 bg-white p-6 shadow-sm">
                 <section className="space-y-6">
-                  <div>
-                    <h2 className="text-lg font-semibold text-black">
-                      HR Admin
-                    </h2>
-                    <p className="mt-1 text-sm text-zinc-600">
-                      Full override — HR can edit any field and set any
-                      status directly, regardless of the normal workflow
-                      gates. Changes here bypass employee/manager submit
-                      rules.
-                    </p>
+                  <div className="flex flex-wrap items-start justify-between gap-3">
+                    <div>
+                      <h2 className="text-lg font-semibold text-black">
+                        HR Admin
+                      </h2>
+                      <p className="mt-1 text-sm text-zinc-600">
+                        Full override — HR can edit any field and set any
+                        status directly, regardless of the normal workflow
+                        gates. Changes here bypass employee/manager submit
+                        rules.
+                      </p>
+                      {!hrEditing && (
+                        <p className="mt-2 text-xs font-medium text-amber-700">
+                          Viewing only. Click Edit to make changes.
+                        </p>
+                      )}
+                    </div>
+                    {!hrEditing && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setHrDraft(cloneAppraisal(appraisal));
+                          setHrError(null);
+                          setHrSuccess(false);
+                          setHrEditing(true);
+                        }}
+                        className="shrink-0 rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:bg-navy-800"
+                      >
+                        Edit
+                      </button>
+                    )}
                   </div>
 
                   <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -2306,6 +2336,7 @@ function AppraisalDetailInner({
                       </label>
                       <select
                         className={inputEnterprise}
+                        disabled={!hrEditing}
                         value={hrDraft.status}
                         onChange={(e) =>
                           setHrDraft({
@@ -2327,6 +2358,7 @@ function AppraisalDetailInner({
                       </label>
                       <select
                         className={inputEnterprise}
+                        disabled={!hrEditing}
                         value={hrDraft.midYearStatus}
                         onChange={(e) =>
                           setHrDraft({
@@ -2379,6 +2411,7 @@ function AppraisalDetailInner({
                                 <textarea
                                   className={`${inputEnterprise} min-h-14 resize-y text-sm`}
                                   rows={2}
+                                  disabled={!hrEditing}
                                   value={kpi.goalsAndKpis}
                                   onChange={(e) => {
                                     const kpis = [...hrDraft.kpis];
@@ -2396,6 +2429,7 @@ function AppraisalDetailInner({
                                   min={0}
                                   max={100}
                                   className={inputEnterprise}
+                                  disabled={!hrEditing}
                                   value={kpi.weightPercent}
                                   onChange={(e) => {
                                     const kpis = [...hrDraft.kpis];
@@ -2411,6 +2445,7 @@ function AppraisalDetailInner({
                                 <input
                                   type="date"
                                   className={inputEnterprise}
+                                  disabled={!hrEditing}
                                   value={kpi.dueDate}
                                   onChange={(e) => {
                                     const kpis = [...hrDraft.kpis];
@@ -2425,6 +2460,7 @@ function AppraisalDetailInner({
                               <td className="px-2 py-2">
                                 <RatingSelect
                                   value={kpi.selfRating}
+                                  disabled={!hrEditing}
                                   onChange={(n) => {
                                     const kpis = [...hrDraft.kpis];
                                     kpis[i] = { ...kpis[i], selfRating: n };
@@ -2435,6 +2471,7 @@ function AppraisalDetailInner({
                               <td className="px-2 py-2">
                                 <RatingSelect
                                   value={kpi.managerRating}
+                                  disabled={!hrEditing}
                                   onChange={(n) => {
                                     const kpis = [...hrDraft.kpis];
                                     kpis[i] = { ...kpis[i], managerRating: n };
@@ -2478,6 +2515,7 @@ function AppraisalDetailInner({
                               <td className="px-2 py-2">
                                 <RatingSelect
                                   value={cap.selfRating}
+                                  disabled={!hrEditing}
                                   onChange={(n) => {
                                     const capabilities = [
                                       ...hrDraft.capabilities,
@@ -2493,6 +2531,7 @@ function AppraisalDetailInner({
                               <td className="px-2 py-2">
                                 <RatingSelect
                                   value={cap.managerRating}
+                                  disabled={!hrEditing}
                                   onChange={(n) => {
                                     const capabilities = [
                                       ...hrDraft.capabilities,
@@ -2520,6 +2559,7 @@ function AppraisalDetailInner({
                       <textarea
                         className={`${inputEnterprise} min-h-24 resize-y text-sm`}
                         rows={4}
+                        disabled={!hrEditing}
                         value={hrDraft.employeeComments}
                         onChange={(e) =>
                           setHrDraft({
@@ -2536,6 +2576,7 @@ function AppraisalDetailInner({
                       <textarea
                         className={`${inputEnterprise} min-h-24 resize-y text-sm`}
                         rows={4}
+                        disabled={!hrEditing}
                         value={hrDraft.managerComments}
                         onChange={(e) =>
                           setHrDraft({
@@ -2552,6 +2593,7 @@ function AppraisalDetailInner({
                       <textarea
                         className={`${inputEnterprise} min-h-20 resize-y text-sm`}
                         rows={3}
+                        disabled={!hrEditing}
                         value={hrDraft.midYearManagerComments}
                         onChange={(e) =>
                           setHrDraft({
@@ -2572,6 +2614,7 @@ function AppraisalDetailInner({
                     </p>
                   )}
 
+                  {hrEditing && (
                   <div className="flex items-center gap-3">
                     <button
                       type="button"
@@ -2588,12 +2631,14 @@ function AppraisalDetailInner({
                         setHrDraft(cloneAppraisal(appraisal));
                         setHrError(null);
                         setHrSuccess(false);
+                        setHrEditing(false);
                       }}
                       className="rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-navy-950 shadow-sm transition hover:border-navy-300 disabled:opacity-50"
                     >
-                      Reset
+                      Cancel
                     </button>
                   </div>
+                  )}
                 </section>
               </div>
             )}
