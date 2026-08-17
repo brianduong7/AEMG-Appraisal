@@ -9,6 +9,7 @@ import {
   appraisalListDisplayName,
   entityBrandColor,
   entityButtonStyle,
+  entityContrastTextClass,
 } from "@/lib/entity-theme";
 import { DEMO_HR } from "@/lib/mock-users";
 import { useRole } from "@/contexts/role-context";
@@ -323,7 +324,7 @@ export function HomeContent() {
     <AppShell active="list">
       {/* Hero strip */}
       <div
-        className={`aife-hero-gradient text-white ${brandColor ? "entity-brand-dark-text" : ""}`}
+        className={`aife-hero-gradient text-white ${entityContrastTextClass(brandColor)}`}
         style={brandColor ? { background: brandColor } : undefined}
       >
         <div className="mx-auto max-w-[1500px] px-4 pb-8 pt-7 sm:px-6">

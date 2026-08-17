@@ -43,6 +43,32 @@ export const ENTITY_ACCENT_HEX: Record<BrandEntity, string> = {
 };
 
 /**
+ * Whether an entity's accent is dark/saturated enough that WHITE text reads
+ * fine on it directly - AOSC's deep orange and W&E's rich blue both qualify;
+ * AEMG's lighter amber and Cloudcampus's pale sky-blue still need the forced
+ * dark override to stay readable. Per explicit call 2026-08-17.
+ */
+const ENTITY_USES_WHITE_TEXT: Record<BrandEntity, boolean> = {
+  AEMG: false,
+  AOSC: true,
+  Cloudcampus: false,
+  "W&E Health": true,
+};
+
+const HEX_TO_BRAND: Record<string, BrandEntity> = Object.fromEntries(
+  (Object.entries(ENTITY_ACCENT_HEX) as [BrandEntity, string][]).map(
+    ([brand, hex]) => [hex, brand]
+  )
+);
+
+/** True if white text should be used directly on this brandColor, rather than forcing dark. */
+function brandUsesWhiteText(brandColor: string | null): boolean {
+  if (!brandColor) return true; // AIFE default - navy surfaces already use white text
+  const brand = HEX_TO_BRAND[brandColor];
+  return brand ? ENTITY_USES_WHITE_TEXT[brand] : true;
+}
+
+/**
  * Raw entity values as they actually arrive from ERPNext's `identity.entity`
  * (see aemg_epm_frappe/api/identity.py): either the AEMG Portal sync's raw
  * brand string on `custom_entity` (real employees - "AIFE" / "Auchin" /
@@ -88,8 +114,23 @@ export function entityButtonStyle(
   brandColor: string | null
 ): { backgroundColor: string; color: string } | undefined {
   return brandColor
-    ? { backgroundColor: brandColor, color: "#1f2328" }
+    ? {
+        backgroundColor: brandColor,
+        color: brandUsesWhiteText(brandColor) ? "#ffffff" : "#1f2328",
+      }
     : undefined;
+}
+
+/**
+ * CSS class to force dark body text on a brand-colored navy surface (header,
+ * hero, sidebar) - only for brands whose accent is too light for the
+ * default white text (see ENTITY_USES_WHITE_TEXT). Returns "" for brands
+ * dark enough to keep the surface's normal white text, and for AIFE itself.
+ */
+export function entityContrastTextClass(brandColor: string | null): string {
+  return brandColor && !brandUsesWhiteText(brandColor)
+    ? "entity-brand-dark-text"
+    : "";
 }
 
 /** Inline style for gold accent text (section titles, active-tab labels) when a brand color is active. */

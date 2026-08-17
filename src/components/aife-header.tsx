@@ -5,7 +5,11 @@ import { AppLogo } from "@/components/app-logo";
 import { HeaderNotificationsButton } from "@/components/header-notifications-button";
 import { useSession } from "@/contexts/session-context";
 import { navCapabilitiesForSession } from "@/lib/nav-roles";
-import { entityBorderStyle, entityBrandColor } from "@/lib/entity-theme";
+import {
+  entityBorderStyle,
+  entityBrandColor,
+  entityContrastTextClass,
+} from "@/lib/entity-theme";
 
 export function AifeHeader({ active }: { active: "list" | "detail" }) {
   const { user, logout, mode, managerProfile, hrProfile } = useSession();
@@ -55,7 +59,7 @@ export function AifeHeader({ active }: { active: "list" | "detail" }) {
 
   return (
     <header
-      className={`aife-header-gradient z-40 shrink-0 text-white ${brandColor ? "entity-brand-dark-text" : ""}`}
+      className={`aife-header-gradient z-40 shrink-0 text-white ${entityContrastTextClass(brandColor)}`}
       style={brandColor ? { background: brandColor } : undefined}
     >
       <div className="flex items-center gap-4 px-4 py-2.5 sm:px-6">
