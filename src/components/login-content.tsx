@@ -6,7 +6,7 @@ import { signIn } from "next-auth/react";
 import { DEMO_HR, DEMO_MANAGER, findMockUser } from "@/lib/mock-users";
 import { AppLogo } from "@/components/app-logo";
 import { useSession } from "@/contexts/session-context";
-import { demoLoginsEnabled } from "@/lib/env";
+import { demoLoginsEnabled, passwordLoginEnabled } from "@/lib/env";
 
 const EMMA_ID = "emma" as const;
 
@@ -92,10 +92,12 @@ export function LoginContent() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const showDemo = demoLoginsEnabled();
+  const showPasswordForm = passwordLoginEnabled();
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault();
     setError(null);
+    if (!showPasswordForm) return; // form isn't rendered when this is false; defensive only
 
     if (showDemo) {
       const normalized = email.trim().toLowerCase();
@@ -196,76 +198,80 @@ export function LoginContent() {
                 Welcome back — access your appraisals.
               </p>
 
-              <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-                <div className={inputShell}>
-                  <MailIcon className="shrink-0 text-navy-600" />
-                  <input
-                    id="login-email"
-                    name="email"
-                    type="email"
-                    autoComplete="email"
-                    placeholder="you@aife.edu.au"
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                    className="min-w-0 flex-1 border-0 bg-transparent text-sm text-navy-950 placeholder:text-slate-400 outline-none"
-                  />
-                </div>
+              {showPasswordForm && (
+                <>
+                  <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+                    <div className={inputShell}>
+                      <MailIcon className="shrink-0 text-navy-600" />
+                      <input
+                        id="login-email"
+                        name="email"
+                        type="email"
+                        autoComplete="email"
+                        placeholder="you@aife.edu.au"
+                        value={email}
+                        onChange={(e) => setEmail(e.target.value)}
+                        className="min-w-0 flex-1 border-0 bg-transparent text-sm text-navy-950 placeholder:text-slate-400 outline-none"
+                      />
+                    </div>
 
-                <div className={inputShell}>
-                  <LockIcon className="shrink-0 text-navy-600" />
-                  <input
-                    id="login-password"
-                    name="password"
-                    type={showPassword ? "text" : "password"}
-                    autoComplete="current-password"
-                    placeholder="••••••••"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                    className="min-w-0 flex-1 border-0 bg-transparent text-sm text-navy-950 placeholder:text-slate-400 outline-none"
-                  />
-                  <button
-                    type="button"
-                    className="shrink-0 text-xs font-medium text-navy-600 hover:text-navy-800"
-                    onClick={() => setShowPassword((v) => !v)}
-                  >
-                    {showPassword ? "Hide" : "Show"}
-                  </button>
-                </div>
+                    <div className={inputShell}>
+                      <LockIcon className="shrink-0 text-navy-600" />
+                      <input
+                        id="login-password"
+                        name="password"
+                        type={showPassword ? "text" : "password"}
+                        autoComplete="current-password"
+                        placeholder="••••••••"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        className="min-w-0 flex-1 border-0 bg-transparent text-sm text-navy-950 placeholder:text-slate-400 outline-none"
+                      />
+                      <button
+                        type="button"
+                        className="shrink-0 text-xs font-medium text-navy-600 hover:text-navy-800"
+                        onClick={() => setShowPassword((v) => !v)}
+                      >
+                        {showPassword ? "Hide" : "Show"}
+                      </button>
+                    </div>
 
-                <div className="flex justify-end">
-                  <button
-                    type="button"
-                    className="text-xs font-medium text-navy-600 hover:text-navy-800"
-                    onClick={() => {
-                      /* Real password reset would go through ERPNext's own
-                         flow - not built yet, deliberately out of scope
-                         here. */
-                    }}
-                  >
-                    Forgot password?
-                  </button>
-                </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        className="text-xs font-medium text-navy-600 hover:text-navy-800"
+                        onClick={() => {
+                          /* Real password reset would go through ERPNext's own
+                             flow - not built yet, deliberately out of scope
+                             here. */
+                        }}
+                      >
+                        Forgot password?
+                      </button>
+                    </div>
 
-                {error ? (
-                  <p className="text-xs text-red-600" role="alert">
-                    {error}
-                  </p>
-                ) : null}
+                    {error ? (
+                      <p className="text-xs text-red-600" role="alert">
+                        {error}
+                      </p>
+                    ) : null}
 
-                <button
-                  type="submit"
-                  disabled={submitting}
-                  className="w-full rounded-xl bg-navy-900 py-3 text-sm font-semibold text-white shadow-lg shadow-navy-900/25 transition hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-60"
-                >
-                  {submitting ? "Signing in…" : "Sign in"}
-                </button>
-              </form>
+                    <button
+                      type="submit"
+                      disabled={submitting}
+                      className="w-full rounded-xl bg-navy-900 py-3 text-sm font-semibold text-white shadow-lg shadow-navy-900/25 transition hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-60"
+                    >
+                      {submitting ? "Signing in…" : "Sign in"}
+                    </button>
+                  </form>
 
-              <div className="my-5 flex items-center gap-3">
-                <div className="h-px flex-1 bg-slate-200" aria-hidden />
-                <span className="shrink-0 text-xs text-slate-400">or</span>
-                <div className="h-px flex-1 bg-slate-200" aria-hidden />
-              </div>
+                  <div className="my-5 flex items-center gap-3">
+                    <div className="h-px flex-1 bg-slate-200" aria-hidden />
+                    <span className="shrink-0 text-xs text-slate-400">or</span>
+                    <div className="h-px flex-1 bg-slate-200" aria-hidden />
+                  </div>
+                </>
+              )}
 
               {/*
                 Uses Auth.js's signIn() rather than posting to the sign-in

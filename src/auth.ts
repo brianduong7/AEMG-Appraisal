@@ -3,6 +3,7 @@ import MicrosoftEntraID from "next-auth/providers/microsoft-entra-id";
 import Credentials from "next-auth/providers/credentials";
 import { resolveErpnextIdentity, type ErpnextIdentity } from "@/lib/erpnext-identity";
 import { verifyErpnextPassword } from "@/lib/erpnext-login";
+import { passwordLoginEnabled } from "@/lib/env";
 
 /**
  * Microsoft Entra SSO. Two gates, in order:
@@ -55,6 +56,11 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
         password: { label: "Password", type: "password" },
       },
       async authorize(creds) {
+        // Server-side gate, not just a hidden UI button - refuses even a
+        // request posted directly to the credentials callback, bypassing
+        // the login form entirely. Prod's client confirmed: Microsoft only.
+        if (!passwordLoginEnabled()) return null;
+
         const email =
           typeof creds?.email === "string" ? creds.email.trim() : "";
         const password =
