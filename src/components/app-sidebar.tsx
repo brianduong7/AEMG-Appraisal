@@ -10,14 +10,25 @@ import {
   parseAppraisalView,
   type AppraisalNavView,
 } from "@/lib/nav-roles";
-import { entityBrandColor, entityContrastTextClass } from "@/lib/entity-theme";
+import {
+  entityBrandColor,
+  entityContrastTextClass,
+  entitySecondaryTextStyle,
+} from "@/lib/entity-theme";
 
 const SIDEBAR_KEY = "aife-sidebar-open";
 
-function IconCog({ className }: { className?: string }) {
+function IconCog({
+  className,
+  style,
+}: {
+  className?: string;
+  style?: React.CSSProperties;
+}) {
   return (
     <svg
       className={className}
+      style={style}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -38,10 +49,17 @@ function IconCog({ className }: { className?: string }) {
   );
 }
 
-function IconUser({ className }: { className?: string }) {
+function IconUser({
+  className,
+  style,
+}: {
+  className?: string;
+  style?: React.CSSProperties;
+}) {
   return (
     <svg
       className={className}
+      style={style}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -57,10 +75,17 @@ function IconUser({ className }: { className?: string }) {
   );
 }
 
-function IconTeam({ className }: { className?: string }) {
+function IconTeam({
+  className,
+  style,
+}: {
+  className?: string;
+  style?: React.CSSProperties;
+}) {
   return (
     <svg
       className={className}
+      style={style}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -76,10 +101,17 @@ function IconTeam({ className }: { className?: string }) {
   );
 }
 
-function IconShield({ className }: { className?: string }) {
+function IconShield({
+  className,
+  style,
+}: {
+  className?: string;
+  style?: React.CSSProperties;
+}) {
   return (
     <svg
       className={className}
+      style={style}
       viewBox="0 0 24 24"
       fill="none"
       stroke="currentColor"
@@ -194,6 +226,13 @@ export function AppSidebar() {
     }`;
   }
 
+  function iconStyle(active: boolean) {
+    // AIFE's gold is AIFE's own accent - other entities get dark grey instead.
+    if (!brandColor) return undefined;
+    if (active) return entitySecondaryTextStyle(brandColor);
+    return undefined; // inactive/hover state already reads via white/xx opacity
+  }
+
   return (
     <>
       {/* Scrim when open — click to close */}
@@ -248,7 +287,10 @@ export function AppSidebar() {
       >
         <div className="flex items-center border-b border-white/10 px-3 py-3.5">
           <div className="min-w-0">
-            <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gold-400">
+            <p
+              className="text-[10px] font-semibold uppercase tracking-[0.16em] text-gold-400"
+              style={entitySecondaryTextStyle(brandColor)}
+            >
               Appraisal
             </p>
             <p className="truncate text-xs text-white/55">{caps.roleLabel}</p>
@@ -309,7 +351,7 @@ export function AppSidebar() {
                 onClick={() => setOpenPersist(false)}
                 className={navLinkClass(active)}
               >
-                <Icon className={iconClass(active)} />
+                <Icon className={iconClass(active)} style={iconStyle(active)} />
                 <span className="truncate">{item.label}</span>
               </Link>
             );
@@ -325,7 +367,10 @@ export function AppSidebar() {
               onClick={() => setOpenPersist(false)}
               className={navLinkClass(activeView === "settings")}
             >
-              <IconCog className={iconClass(activeView === "settings")} />
+              <IconCog
+                className={iconClass(activeView === "settings")}
+                style={iconStyle(activeView === "settings")}
+              />
               <span className="truncate">Admin Settings</span>
             </Link>
           </div>

@@ -10,6 +10,7 @@ import {
   entityBrandColor,
   entityButtonStyle,
   entityContrastTextClass,
+  entitySecondaryTextStyle,
 } from "@/lib/entity-theme";
 import { DEMO_HR } from "@/lib/mock-users";
 import { useRole } from "@/contexts/role-context";
@@ -328,7 +329,10 @@ export function HomeContent() {
         style={brandColor ? { background: brandColor } : undefined}
       >
         <div className="mx-auto max-w-[1500px] px-4 pb-8 pt-7 sm:px-6">
-          <p className="text-xs font-semibold uppercase tracking-[0.18em] text-gold-400">
+          <p
+            className="text-xs font-semibold uppercase tracking-[0.18em] text-gold-400"
+            style={entitySecondaryTextStyle(brandColor)}
+          >
             {erpAppraisalCycleLabel(cycleYear)}
           </p>
           <h1 className="mt-1 text-2xl font-semibold tracking-tight sm:text-3xl">

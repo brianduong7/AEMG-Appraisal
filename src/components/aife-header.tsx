@@ -9,6 +9,7 @@ import {
   entityBorderStyle,
   entityBrandColor,
   entityContrastTextClass,
+  entitySecondaryTextStyle,
 } from "@/lib/entity-theme";
 
 export function AifeHeader({ active }: { active: "list" | "detail" }) {
@@ -71,7 +72,12 @@ export function AifeHeader({ active }: { active: "list" | "detail" }) {
           >
             <span className="font-medium text-white/90">Performance</span>
             <span className="mx-1.5 text-white/30">/</span>
-            <span className="text-gold-300">Appraisal</span>
+            <span
+              className="text-gold-300"
+              style={entitySecondaryTextStyle(brandColor)}
+            >
+              Appraisal
+            </span>
             {active === "detail" && (
               <>
                 <span className="mx-1.5 text-white/30">/</span>

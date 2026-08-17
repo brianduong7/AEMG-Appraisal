@@ -133,6 +133,20 @@ export function entityContrastTextClass(brandColor: string | null): string {
     : "";
 }
 
+/**
+ * Inline style for de-emphasized "gold" accent text (breadcrumb segments,
+ * eyebrow labels, sidebar nav icons/active state) when a brand color is
+ * active. AIFE's gold accent is AIFE's own brand color, not a generic
+ * "muted" token - other entities get a plain dark grey instead of
+ * inheriting AIFE's gold. Returns undefined for AIFE, so the existing
+ * gold-* classes keep showing through unchanged.
+ */
+export function entitySecondaryTextStyle(
+  brandColor: string | null
+): { color: string } | undefined {
+  return brandColor ? { color: "#334155" } : undefined; // slate-700
+}
+
 /** Inline style for gold accent text (section titles, active-tab labels) when a brand color is active. */
 export function entityTextStyle(
   brandColor: string | null
