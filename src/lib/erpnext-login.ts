@@ -22,8 +22,18 @@ export async function verifyErpnextPassword(
       signal: AbortSignal.timeout(8000),
     });
     if (!res.ok) return false;
-    const body = (await res.json().catch(() => ({}))) as { message?: string };
-    return body?.message === "Logged In";
+    const body = (await res.json().catch(() => ({}))) as {
+      message?: string;
+      exception?: string;
+    };
+    // Frappe's success message varies with the account's role/desk access -
+    // "Logged In" for a full desk user, "No App" for one with no assigned
+    // workspace (e.g. an Employee with no HR/Manager roles). Both are a
+    // genuinely correct password; only an `exception` in the body (wrong
+    // password -> AuthenticationError, HTTP 401 anyway) means failure.
+    // Caught live: a real test account with the right password was refused
+    // sign-in because it matched only the "Logged In" string.
+    return !body.exception;
   } catch (e) {
     console.error("[auth] ERPNext password verify failed:", e);
     return false;
