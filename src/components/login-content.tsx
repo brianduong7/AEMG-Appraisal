@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
-import { useSearchParams } from "next/navigation";
+import { useEffect, useState, type FormEvent } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import { signIn } from "next-auth/react";
 import { DEMO_HR, DEMO_MANAGER, findMockUser } from "@/lib/mock-users";
 import { AppLogo } from "@/components/app-logo";
@@ -85,7 +85,30 @@ function LockIcon({ className }: { className?: string }) {
 export function LoginContent() {
   const { loginEmployee, loginManager, loginHr } = useSession();
   const emma = findMockUser(EMMA_ID);
-  const ssoError = ssoErrorMessage(useSearchParams().get("error"));
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
+  /**
+   * Captured into state on first render, not read live from the URL - the
+   * `?error=` query param otherwise sticks around forever (a plain refresh
+   * reloads the exact same URL, so the message never went away; someone
+   * had to manually edit the address bar to clear it). The effect below
+   * strips the param from the URL right after, so the message still shows
+   * once here but a refresh lands on a clean sign-in screen.
+   */
+  const [ssoError] = useState(() =>
+    ssoErrorMessage(searchParams.get("error"))
+  );
+
+  useEffect(() => {
+    if (!searchParams.get("error")) return;
+    const params = new URLSearchParams(searchParams);
+    params.delete("error");
+    const query = params.toString();
+    router.replace(query ? `/?${query}` : "/", { scroll: false });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
