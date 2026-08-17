@@ -21,6 +21,7 @@ import {
 } from "@/lib/types";
 import { AppShell } from "@/components/app-shell";
 import { cloneAppraisal } from "@/lib/clone-appraisal";
+import { entityBrandColor, entityButtonStyle } from "@/lib/entity-theme";
 import {
   DEMO_COMPANY_NAME,
   DEMO_HR,
@@ -264,6 +265,7 @@ function AppraisalDetailInner({
 }) {
   const { user: sessionUser, mode } = useSession();
   const { role, setRole } = useRole();
+  const brandColor = entityBrandColor(sessionUser?.entity);
 
   /** HR viewing their own record acts as the employee for that appraisal. */
   const viewingOwnAsHr =
@@ -1210,6 +1212,7 @@ function AppraisalDetailInner({
                       : undefined
                 }
                 className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:bg-navy-800 disabled:opacity-50"
+                style={entityButtonStyle(brandColor)}
                 onClick={() => saveEmployee("employee_submit")}
               >
                 Submit KPIs
@@ -1221,6 +1224,7 @@ function AppraisalDetailInner({
               type="button"
               disabled={busy}
               className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:bg-navy-800 disabled:opacity-50"
+              style={entityButtonStyle(brandColor)}
               onClick={() => void approveKpis()}
             >
               Approve KPIs
@@ -1245,6 +1249,7 @@ function AppraisalDetailInner({
                     : undefined
                 }
                 className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:bg-navy-800 disabled:opacity-50"
+                style={entityButtonStyle(brandColor)}
                 onClick={() => saveEmployeeMidYear("employee_midyear_submit")}
               >
                 Submit mid-year review
@@ -1270,6 +1275,7 @@ function AppraisalDetailInner({
                     : undefined
                 }
                 className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:bg-navy-800 disabled:opacity-50"
+                style={entityButtonStyle(brandColor)}
                 onClick={() => saveEmployeeAnnual("employee_annual_submit")}
               >
                 Submit for manager review
@@ -1290,6 +1296,7 @@ function AppraisalDetailInner({
                 type="button"
                 disabled={busy}
                 className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:bg-navy-800 disabled:opacity-50"
+                style={entityButtonStyle(brandColor)}
                 onClick={() => void saveMidYear("manager_midyear_submit")}
               >
                 Submit mid-year review
@@ -1320,6 +1327,11 @@ function AppraisalDetailInner({
                   appraisal.status === "reviewed"
                     ? "rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-navy-950 shadow-sm transition hover:border-navy-300 disabled:opacity-50"
                     : "rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:bg-navy-800 disabled:opacity-50"
+                }
+                style={
+                  appraisal.status === "reviewed"
+                    ? undefined
+                    : entityButtonStyle(brandColor)
                 }
                 onClick={() => submitManagerReview()}
               >
@@ -2323,6 +2335,7 @@ function AppraisalDetailInner({
                           setHrEditing(true);
                         }}
                         className="shrink-0 rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:bg-navy-800"
+                        style={entityButtonStyle(brandColor)}
                       >
                         Edit
                       </button>
@@ -2621,6 +2634,7 @@ function AppraisalDetailInner({
                       disabled={hrSaving}
                       onClick={() => saveHrChanges()}
                       className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:bg-navy-800 disabled:opacity-50"
+                      style={entityButtonStyle(brandColor)}
                     >
                       {hrSaving ? "Saving…" : "Save HR changes"}
                     </button>
@@ -2683,6 +2697,8 @@ function FeedbackSection({
   appraisalId: string;
   requestedByName: string;
 }) {
+  const { user: feedbackSessionUser } = useSession();
+  const brandColor = entityBrandColor(feedbackSessionUser?.entity);
   const [open, setOpen] = useState(false);
   const [requests, setRequests] = useState<FeedbackRequest[] | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -2900,6 +2916,7 @@ function FeedbackSection({
                   type="submit"
                   disabled={creating || !reviewerName.trim()}
                   className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-medium text-white hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  style={entityButtonStyle(brandColor)}
                 >
                   {creating ? "Creating…" : "Create link"}
                 </button>
@@ -3038,6 +3055,8 @@ function TabStepNav({
   activeTab: AppraisalTabId;
   onTabChange: (tab: AppraisalTabId) => void;
 }) {
+  const { user: tabNavSessionUser } = useSession();
+  const brandColor = entityBrandColor(tabNavSessionUser?.entity);
   const index = APPRAISAL_TABS.findIndex(([id]) => id === activeTab);
   const prev = index > 0 ? APPRAISAL_TABS[index - 1] : null;
   const next =
@@ -3070,6 +3089,7 @@ function TabStepNav({
           title={`Go to ${next[1]}`}
           aria-label={`Go to ${next[1]}`}
           className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-navy-900 text-sm font-medium text-white shadow-sm transition hover:bg-navy-800"
+          style={entityButtonStyle(brandColor)}
         >
           →
         </button>

@@ -5,7 +5,11 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import type { Appraisal, CycleStatus } from "@/lib/types";
 import { annualCycleStatus, CYCLE_STATUS_LABELS } from "@/lib/types";
-import { appraisalListDisplayName, entityBrandColor } from "@/lib/entity-theme";
+import {
+  appraisalListDisplayName,
+  entityBrandColor,
+  entityButtonStyle,
+} from "@/lib/entity-theme";
 import { DEMO_HR } from "@/lib/mock-users";
 import { useRole } from "@/contexts/role-context";
 import { useSession } from "@/contexts/session-context";
@@ -505,6 +509,7 @@ export function HomeContent() {
                   type="button"
                   disabled={createBusy}
                   className="rounded-lg bg-navy-900 px-4 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  style={entityButtonStyle(brandColor)}
                   onClick={() => createAppraisalForOwner(myOwnerId!)}
                 >
                   {createBusy ? "Creating…" : "+ New Appraisal"}
@@ -530,6 +535,7 @@ export function HomeContent() {
                   type="button"
                   disabled={createBusy}
                   className="mt-4 rounded-lg bg-navy-900 px-5 py-2.5 text-sm font-semibold text-white shadow-md hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-50"
+                  style={entityButtonStyle(brandColor)}
                   onClick={() => createAppraisalForOwner(myOwnerId!)}
                 >
                   {createBusy ? "Creating…" : "Create first appraisal"}
@@ -672,6 +678,7 @@ export function HomeContent() {
                             <button
                               type="button"
                               className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-navy-900 text-white shadow-sm transition hover:bg-navy-800"
+                              style={entityButtonStyle(brandColor)}
                               title="Edit (opens HR Admin)"
                               aria-label="Edit"
                               onClick={(e) => {

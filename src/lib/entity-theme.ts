@@ -76,3 +76,18 @@ export function entityBrandColor(
   const brand = brandEntity(entity);
   return brand ? ENTITY_ACCENT_HEX[brand] : null;
 }
+
+/**
+ * Inline style for a primary (navy-900) button when a brand color is
+ * active - same solid color + dark text as the header/hero/sidebar, so
+ * buttons match the rest of the page rather than staying navy against an
+ * orange/blue backdrop. Pass the result of entityBrandColor() straight in;
+ * returns undefined for AIFE, so spreading it onto `style` is a no-op.
+ */
+export function entityButtonStyle(
+  brandColor: string | null
+): { backgroundColor: string; color: string } | undefined {
+  return brandColor
+    ? { backgroundColor: brandColor, color: "#1f2328" }
+    : undefined;
+}
