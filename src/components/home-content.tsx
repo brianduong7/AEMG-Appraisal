@@ -344,7 +344,7 @@ export function HomeContent() {
             {appraisalView === "team" &&
               "Review direct reports — mid-year checkpoints and annual appraisals."}
             {appraisalView === "admin" &&
-              "Super Admin view — all appraisals, free open access for demo review."}
+              "Super Admin view — every appraisal in the org."}
             {appraisalView === "settings" &&
               "Configure review windows and other appraisal module settings."}
           </p>

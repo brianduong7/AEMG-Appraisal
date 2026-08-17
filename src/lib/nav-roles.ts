@@ -161,7 +161,7 @@ export function viewSubtitle(view: AppraisalNavView): string {
   if (view === "settings") {
     return "Cycle windows and org settings for the appraisal module.";
   }
-  return "Org-wide appraisal list (demo Super Admin / Super User). Free open access.";
+  return "Org-wide appraisal list — HR and Super Admin access.";
 }
 
 /** Employees a manager may create appraisals for (direct reports). */
