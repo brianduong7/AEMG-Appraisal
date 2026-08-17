@@ -319,7 +319,7 @@ export function HomeContent() {
     <AppShell active="list">
       {/* Hero strip */}
       <div
-        className="aife-hero-gradient text-white"
+        className={`aife-hero-gradient text-white ${brandColor ? "entity-brand-dark-text" : ""}`}
         style={brandColor ? { background: brandColor } : undefined}
       >
         <div className="mx-auto max-w-[1500px] px-4 pb-8 pt-7 sm:px-6">

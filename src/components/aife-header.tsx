@@ -55,7 +55,7 @@ export function AifeHeader({ active }: { active: "list" | "detail" }) {
 
   return (
     <header
-      className="aife-header-gradient z-40 shrink-0 text-white"
+      className={`aife-header-gradient z-40 shrink-0 text-white ${brandColor ? "entity-brand-dark-text" : ""}`}
       style={brandColor ? { background: brandColor } : undefined}
     >
       <div className="flex items-center gap-4 px-4 py-2.5 sm:px-6">
