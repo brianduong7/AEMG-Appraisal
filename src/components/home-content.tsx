@@ -113,6 +113,15 @@ export function HomeContent() {
   const [createError, setCreateError] = useState<string | null>(null);
 
   const managerId = managerProfile?.id ?? null;
+  /**
+   * The signed-in elevated-role user's own id, whichever role that is -
+   * used to scope "My Team" (and HR's own "My Appraisals") to THEIR real
+   * reports_to relationships, not a hardcoded demo manager. Real reports
+   * are resolved via each appraisal's own `reviewingManagerId` snapshot
+   * (set from ERPNext's `reports_to` at creation - see api/appraisals),
+   * exactly the same signal managers already use.
+   */
+  const teamOwnerId = managerId ?? hrProfile?.id ?? null;
   const caps = useMemo(
     () => navCapabilitiesForSession(mode, user, managerId),
     [mode, user, managerId]
@@ -245,11 +254,11 @@ export function HomeContent() {
       appraisalView,
       mode,
       user,
-      managerId
+      teamOwnerId
     );
     if (!employeeFilterId) return scoped;
     return scoped.filter((a) => a.ownerUserId === employeeFilterId);
-  }, [list, appraisalView, mode, user, managerId, employeeFilterId]);
+  }, [list, appraisalView, mode, user, teamOwnerId, employeeFilterId]);
 
   /* Reset to page 1 whenever the underlying result set changes shape -
      otherwise switching views/filters can strand the user on a now-empty
@@ -275,7 +284,7 @@ export function HomeContent() {
       appraisalView,
       mode,
       user,
-      managerId
+      teamOwnerId
     );
     const byOwner = new Map<string, string>();
     for (const a of scoped) {
@@ -291,7 +300,7 @@ export function HomeContent() {
         searchText: label,
       }))
       .sort((a, b) => a.label.localeCompare(b.label));
-  }, [list, appraisalView, mode, user, managerId]);
+  }, [list, appraisalView, mode, user, teamOwnerId]);
 
   const myOwnerId =
     mode === "employee" && user

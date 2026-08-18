@@ -125,16 +125,19 @@ export function filterAppraisalsForView(
     if (!ownerId) return [];
     return list.filter((a) => a.ownerUserId === ownerId);
   }
-  /* team — direct reports only */
+  /*
+   * team — direct reports only, for whichever elevated role is active
+   * (manager or HR). `managerId` carries that role's own id (see the
+   * teamOwnerId comment at home-content.tsx's call site) - HR no longer
+   * gets a special-cased hardcoded demo manager here. `directReportUserIds`
+   * only ever matches the demo roster, but `reviewingManagerId` is real
+   * per-appraisal data (ERPNext's `reports_to`, snapshotted at creation -
+   * see api/appraisals/route.ts), so this already works correctly for real
+   * SSO managers AND, now, real SSO HR users with their own direct reports.
+   */
   const mid =
     managerId ??
-    (mode === "employee" && user && hasDirectReports(user.id) ? user.id : null) ??
-    (mode === "hr" ? DEMO_MANAGER.id : null);
-  if (mode === "hr") {
-    /* HR “My Team” demo: show Mark’s direct-report set as a sample team view. */
-    const ids = new Set(directReportUserIds(DEMO_MANAGER.id));
-    return list.filter((a) => ids.has(a.ownerUserId));
-  }
+    (mode === "employee" && user && hasDirectReports(user.id) ? user.id : null);
   if (!mid) return [];
   const ids = new Set(directReportUserIds(mid));
   return list.filter(
