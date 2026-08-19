@@ -266,6 +266,18 @@ export async function getAppraisal(id: string): Promise<Appraisal | null> {
   return list.find((a) => a.id === id) ?? null;
 }
 
+/**
+ * HR-only, permanent delete. Returns true if a matching record was found
+ * and removed, false if no such id existed (caller should 404, not error).
+ */
+export async function deleteAppraisal(id: string): Promise<boolean> {
+  const list = await readAppraisals();
+  const next = list.filter((a) => a.id !== id);
+  if (next.length === list.length) return false;
+  await writeAppraisals(next);
+  return true;
+}
+
 export async function writeAppraisals(appraisals: Appraisal[]): Promise<void> {
   if (USE_MEMORY_STORE) {
     memoryAppraisals = appraisals;
