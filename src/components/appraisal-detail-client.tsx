@@ -2066,7 +2066,7 @@ function AppraisalDetailInner({
                        request was misattributed to "Mark Stevenson"/"HR
                        Manager" instead of themselves. Same bug shape as the
                        other DEMO_*-literal fixes this session. */
-                    sessionUser?.displayName ??
+                    sessionUser?.employeeName ??
                     (isHr ? DEMO_HR.displayName : DEMO_MANAGER.displayName)
                   }
                 />
