@@ -37,22 +37,27 @@ export type BrandEntity = "AEMG" | "AOSC" | "Cloudcampus" | "W&E Health";
 
 export const ENTITY_ACCENT_HEX: Record<BrandEntity, string> = {
   AEMG: "#F19608",
-  AOSC: "#FF751F",
+  // Lightened from the original deep orange (#FF751F) per explicit call
+  // 2026-08-19 - AIFE and AEMG deliberately untouched.
+  AOSC: "#FFAD7A",
   Cloudcampus: "#00A0D5",
-  "W&E Health": "#009FE3",
+  // Lightened from the original rich blue (#009FE3), same call.
+  "W&E Health": "#66C6EE",
 };
 
 /**
  * Whether an entity's accent is dark/saturated enough that WHITE text reads
- * fine on it directly - AOSC's deep orange and W&E's rich blue both qualify;
- * AEMG's lighter amber and Cloudcampus's pale sky-blue still need the forced
- * dark override to stay readable. Per explicit call 2026-08-17.
+ * fine on it directly. AEMG's amber and Cloudcampus's pale sky-blue need the
+ * forced dark override to stay readable. AOSC and W&E Health used to be dark
+ * enough for white text directly, but both were lightened per explicit call
+ * 2026-08-19 - now too light for white, so they switch to the same
+ * forced-dark treatment.
  */
 const ENTITY_USES_WHITE_TEXT: Record<BrandEntity, boolean> = {
   AEMG: false,
-  AOSC: true,
+  AOSC: false,
   Cloudcampus: false,
-  "W&E Health": true,
+  "W&E Health": false,
 };
 
 const HEX_TO_BRAND: Record<string, BrandEntity> = Object.fromEntries(
