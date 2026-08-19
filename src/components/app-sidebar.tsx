@@ -220,18 +220,17 @@ export function AppSidebar() {
     }`;
   }
 
-  function iconClass(active: boolean) {
-    return `h-5 w-5 shrink-0 ${
-      active ? "text-gold-400" : "text-white/50 group-hover:text-gold-300"
-    }`;
-  }
-
-  function iconStyle(active: boolean) {
-    // AIFE's gold is AIFE's own accent - other entities get dark grey instead.
-    if (!brandColor) return undefined;
-    if (active) return entitySecondaryTextStyle(brandColor);
-    return undefined; // inactive/hover state already reads via white/xx opacity
-  }
+  /**
+   * Icon color used to be driven independently (gold-400/white-50, with its
+   * own brand-color override) while the label right next to it followed
+   * navLinkClass's white/white-65 instead - on non-AIFE brands the two
+   * visibly disagreed (e.g. a white label next to a dark-slate icon on
+   * W&E Health). The icon SVGs already use `stroke="currentColor"`, so
+   * dropping their own color classes lets them inherit whatever color the
+   * label actually renders in - same class, same brand override, always in
+   * sync, no separate logic to keep matched by hand.
+   */
+  const iconClass = "h-5 w-5 shrink-0";
 
   return (
     <>
@@ -254,7 +253,11 @@ export function AppSidebar() {
           type="button"
           onClick={toggle}
           className={`fixed left-0 top-1/2 z-50 flex h-14 w-8 -translate-y-1/2 items-center justify-center rounded-r-lg bg-navy-900 text-gold-400 shadow-lg shadow-navy-900/40 transition hover:w-9 hover:bg-navy-800 hover:text-gold-300 ${entityContrastTextClass(brandColor)}`}
-          style={brandColor ? { background: brandColor } : undefined}
+          style={
+            brandColor
+              ? { background: brandColor, ...entitySecondaryTextStyle(brandColor) }
+              : undefined
+          }
           title="Open appraisal menu"
           aria-label="Open appraisal menu"
           aria-expanded={false}
@@ -302,7 +305,11 @@ export function AppSidebar() {
           type="button"
           onClick={toggle}
           className={`absolute top-1/2 -right-7 flex h-14 w-7 -translate-y-1/2 items-center justify-center rounded-r-lg bg-navy-900 text-gold-400 shadow-md transition hover:bg-navy-800 hover:text-gold-300 ${entityContrastTextClass(brandColor)}`}
-          style={brandColor ? { background: brandColor } : undefined}
+          style={
+            brandColor
+              ? { background: brandColor, ...entitySecondaryTextStyle(brandColor) }
+              : undefined
+          }
           title="Close menu"
           aria-label="Close appraisal menu"
           aria-expanded={true}
@@ -351,7 +358,7 @@ export function AppSidebar() {
                 onClick={() => setOpenPersist(false)}
                 className={navLinkClass(active)}
               >
-                <Icon className={iconClass(active)} style={iconStyle(active)} />
+                <Icon className={iconClass} />
                 <span className="truncate">{item.label}</span>
               </Link>
             );
@@ -367,10 +374,7 @@ export function AppSidebar() {
               onClick={() => setOpenPersist(false)}
               className={navLinkClass(activeView === "settings")}
             >
-              <IconCog
-                className={iconClass(activeView === "settings")}
-                style={iconStyle(activeView === "settings")}
-              />
+              <IconCog className={iconClass} />
               <span className="truncate">Admin Settings</span>
             </Link>
           </div>
