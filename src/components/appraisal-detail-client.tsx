@@ -2060,7 +2060,14 @@ function AppraisalDetailInner({
                 <FeedbackSection
                   appraisalId={appraisal.id}
                   requestedByName={
-                    isHr ? DEMO_HR.displayName : DEMO_MANAGER.displayName
+                    /* Whoever is actually signed in and requesting the
+                       feedback link - was hardcoded to the demo HR/manager
+                       display name, so every real SSO manager/HR's feedback
+                       request was misattributed to "Mark Stevenson"/"HR
+                       Manager" instead of themselves. Same bug shape as the
+                       other DEMO_*-literal fixes this session. */
+                    sessionUser?.displayName ??
+                    (isHr ? DEMO_HR.displayName : DEMO_MANAGER.displayName)
                   }
                 />
               )}
