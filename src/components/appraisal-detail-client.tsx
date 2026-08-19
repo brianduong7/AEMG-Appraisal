@@ -268,7 +268,8 @@ function AppraisalDetailInner({
    *  access to the admin tab's content is still gated by isHr further down. */
   initialTab: AppraisalTabId;
 }) {
-  const { user: sessionUser, mode, isSso, hrProfile } = useSession();
+  const { user: sessionUser, mode, isSso, hrProfile, managerProfile } =
+    useSession();
   const { role, setRole } = useRole();
   const brandColor = entityBrandColor(sessionUser?.entity);
 
@@ -289,17 +290,38 @@ function AppraisalDetailInner({
     mode === "hr" &&
     hrProfile != null &&
     appraisal.ownerUserId === hrProfile.id;
+  /**
+   * Same problem as viewingOwnAsHr above, for the manager side: a manager
+   * creating/working on THEIR OWN appraisal was stuck on the manager-review
+   * placeholder ("The employee has not submitted this appraisal yet...",
+   * no KPI form, no Save/Submit at all) instead of the normal employee
+   * create/submit flow - because `role` was unconditionally set to
+   * "manager" for anyone in manager mode, and the KPI draft state only
+   * populates when `role === "employee"`. Reported from a real prod SSO
+   * user (manager) whose Save/Submit KPIs appeared to do nothing; confirmed
+   * live with the demo Manager account before this fix. Mirrors
+   * viewingOwnAsHr exactly - `managerProfile.id` is the same "whichever
+   * manager account is actually signed in" signal.
+   */
+  const viewingOwnAsManager =
+    mode === "manager" &&
+    managerProfile != null &&
+    appraisal.ownerUserId === managerProfile.id;
   const user = viewingOwnAsHr
     ? (findMockUser(DEMO_HR.id) ?? sessionUser)
-    : sessionUser;
+    : viewingOwnAsManager
+      ? (findMockUser(DEMO_MANAGER.id) ?? sessionUser)
+      : sessionUser;
 
   useEffect(() => {
     if (mode === "employee") setRole("employee");
-    if (mode === "manager") setRole("manager");
+    if (mode === "manager") {
+      setRole(viewingOwnAsManager ? "employee" : "manager");
+    }
     if (mode === "hr") {
       setRole(viewingOwnAsHr ? "employee" : "hr");
     }
-  }, [mode, setRole, viewingOwnAsHr]);
+  }, [mode, setRole, viewingOwnAsHr, viewingOwnAsManager]);
 
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
