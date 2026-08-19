@@ -268,13 +268,27 @@ function AppraisalDetailInner({
    *  access to the admin tab's content is still gated by isHr further down. */
   initialTab: AppraisalTabId;
 }) {
-  const { user: sessionUser, mode, isSso } = useSession();
+  const { user: sessionUser, mode, isSso, hrProfile } = useSession();
   const { role, setRole } = useRole();
   const brandColor = entityBrandColor(sessionUser?.entity);
 
-  /** HR viewing their own record acts as the employee for that appraisal. */
+  /**
+   * HR viewing their own record acts as the employee for that appraisal -
+   * otherwise they can never go through the normal create/submit flow on
+   * their own appraisal, only the HR Admin override view (which is built
+   * for reviewing someone ELSE's record, not building your own from
+   * scratch). This used to compare against DEMO_HR.id literally, so it
+   * only ever matched the demo HR login - every real SSO HR user (whose
+   * id is a real ERPNext Employee id, e.g. "HR-EMP-00268") always failed
+   * this check, even on their own appraisal. `hrProfile.id` is the same
+   * "whichever HR account is actually signed in" signal already used for
+   * "My Team"/"My Appraisals" (see home-content.tsx's teamOwnerId) -
+   * correct for both demo and real HR logins.
+   */
   const viewingOwnAsHr =
-    mode === "hr" && appraisal.ownerUserId === DEMO_HR.id;
+    mode === "hr" &&
+    hrProfile != null &&
+    appraisal.ownerUserId === hrProfile.id;
   const user = viewingOwnAsHr
     ? (findMockUser(DEMO_HR.id) ?? sessionUser)
     : sessionUser;
