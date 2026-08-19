@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import {
+  deleteAppraisal,
   getAppraisal,
   hasOtherActiveAppraisal,
   updateAppraisal,
@@ -268,6 +269,26 @@ export async function GET(
     return NextResponse.json({ error: "Not found" }, { status: 404 });
   }
   return NextResponse.json(appraisal);
+}
+
+/**
+ * HR-only permanent delete, from the Super Admin list. Authorization here
+ * matches the rest of this route's HR-side actions (e.g. hr_update): no
+ * server-side role check, trusted from the client the same way the Delete
+ * button itself is only rendered for `caps.canSuperAdmin`. Irreversible, so
+ * the client gates this behind a confirmation dialog before ever calling it.
+ */
+export async function DELETE(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  const { id } = await params;
+  const removed = await deleteAppraisal(id);
+  if (!removed) {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
+  await removeNotificationsForAppraisal(id);
+  return NextResponse.json({ ok: true });
 }
 
 export async function PATCH(
