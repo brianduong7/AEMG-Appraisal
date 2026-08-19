@@ -183,46 +183,26 @@ export function AdminSettingsPanel() {
           <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-5 py-4">
             <div className="min-w-0">
               <p className="text-sm font-medium text-navy-950">
-                Current cycle: {cycleSpanLabel(windows.currentCycleYear)}
+                Appraisal cycle
               </p>
               <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
-                {cycleConfirm
-                  ? `Start the ${cycleSpanLabel(windows.currentCycleYear + 1)} cycle now? This can't be undone.`
-                  : `Advance to the ${cycleSpanLabel(windows.currentCycleYear + 1)} cycle when this year's appraisals are done.`}
+                Pick the next cycle to advance to when this year&apos;s
+                appraisals are done.
               </p>
             </div>
-            {cycleConfirm ? (
-              <div className="flex shrink-0 items-center gap-2">
-                <button
-                  type="button"
-                  disabled={cycleBusy}
-                  onClick={() => setCycleConfirm(false)}
-                  className="rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-600 shadow-sm transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  disabled={cycleBusy}
-                  onClick={() => void startNextCycle()}
-                  className="rounded-lg bg-navy-900 px-3.5 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-50"
-                  style={entityButtonStyle(brandColor)}
-                >
-                  {cycleBusy
-                    ? "Starting…"
-                    : `Confirm: start ${cycleSpanLabel(windows.currentCycleYear + 1)}`}
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                disabled={cycleBusy}
-                onClick={() => setCycleConfirm(true)}
-                className="shrink-0 rounded-lg border border-navy-200 bg-white px-3.5 py-2 text-sm font-semibold text-navy-900 shadow-sm transition hover:border-navy-400 hover:bg-navy-50 disabled:cursor-not-allowed disabled:opacity-50"
-              >
+            <select
+              disabled={cycleBusy}
+              value={cycleConfirm ? "next" : "current"}
+              onChange={(e) => setCycleConfirm(e.target.value === "next")}
+              className="shrink-0 rounded-lg border border-navy-200 bg-white px-3 py-2 text-sm font-semibold text-navy-900 shadow-sm transition hover:border-navy-400 disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              <option value="current">
+                Current cycle: {cycleSpanLabel(windows.currentCycleYear)}
+              </option>
+              <option value="next">
                 Start {cycleSpanLabel(windows.currentCycleYear + 1)} cycle →
-              </button>
-            )}
+              </option>
+            </select>
           </div>
 
           <div className="border-b border-slate-100 bg-slate-50/60 px-5 py-3">
@@ -266,6 +246,54 @@ export function AdminSettingsPanel() {
             </p>
           )}
         </>
+      )}
+
+      {cycleConfirm && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-navy-950/40 px-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="start-cycle-title"
+        >
+          <div className="w-full max-w-sm rounded-xl bg-white p-5 shadow-xl">
+            <h2
+              id="start-cycle-title"
+              className="text-base font-semibold text-slate-900"
+            >
+              Start the {cycleSpanLabel(windows.currentCycleYear + 1)} cycle?
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              New appraisals will be created under{" "}
+              {cycleSpanLabel(windows.currentCycleYear + 1)}
+              {" "}
+              from now on. Existing appraisals keep their own cycle - this
+              never touches past or in-progress records. This can&apos;t be
+              undone.
+            </p>
+            {error && <p className="mt-3 text-sm text-red-600">{error}</p>}
+            <div className="mt-5 flex justify-end gap-2">
+              <button
+                type="button"
+                disabled={cycleBusy}
+                onClick={() => setCycleConfirm(false)}
+                className="rounded-lg border border-slate-200 bg-white px-3.5 py-2 text-sm font-semibold text-slate-600 shadow-sm transition hover:border-slate-300 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                disabled={cycleBusy}
+                onClick={() => void startNextCycle()}
+                className="rounded-lg bg-navy-900 px-3.5 py-2 text-sm font-semibold text-white shadow-md shadow-navy-900/20 transition hover:bg-navy-800 disabled:cursor-not-allowed disabled:opacity-50"
+                style={entityButtonStyle(brandColor)}
+              >
+                {cycleBusy
+                  ? "Starting…"
+                  : `Start ${cycleSpanLabel(windows.currentCycleYear + 1)}`}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </section>
   );

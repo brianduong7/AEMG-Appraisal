@@ -5,7 +5,7 @@ import {
   hasOtherActiveAppraisal,
   updateAppraisal,
 } from "@/lib/appraisal-store";
-import { DEMO_HR, DEMO_MANAGER } from "@/lib/mock-users";
+import { DEMO_HR, DEMO_MANAGER, findMockUser } from "@/lib/mock-users";
 import {
   addReviewPendingNotification,
   removeNotificationsForAppraisal,
@@ -45,6 +45,21 @@ function parseOptionalRating(raw: unknown): number | null {
   const r = Math.round(v);
   if (r < 1 || r > 5) return null;
   return r;
+}
+
+/**
+ * The demo-manager/demo-HR fallback ("mark"/"hr") only makes sense for the
+ * demo roster, where every login maps to one of those two fixed inboxes.
+ * For a real SSO owner it used to apply anyway, silently routing their
+ * notification to the DEMO Mark/HR account instead of their real manager -
+ * a real employee's submission would show up as noise in the demo account's
+ * "Pending your review" list, while their actual manager (who may not even
+ * have signed in yet) never got notified at all. Reserve the demo fallback
+ * for demo owners only; for a real owner with no resolvable manager, leave
+ * it unassigned rather than misattributing it to Mark.
+ */
+function isDemoOwner(ownerUserId: string): boolean {
+  return findMockUser(ownerUserId) != null;
 }
 
 /** Initial KPI lock — weights and KPI text only; no self-ratings yet. */
@@ -392,7 +407,8 @@ export async function PATCH(
       );
       const reviewingManagerId =
         action === "employee_submit"
-          ? (current.reviewingManagerId ?? DEMO_MANAGER.id)
+          ? (current.reviewingManagerId ??
+              (isDemoOwner(current.ownerUserId) ? DEMO_MANAGER.id : null))
           : current.reviewingManagerId;
 
       return {
@@ -423,14 +439,22 @@ export async function PATCH(
       );
     }
     if (action === "employee_submit" && next.status === "submitted") {
-      const managerUserId = next.reviewingManagerId ?? DEMO_MANAGER.id;
-      await addReviewPendingNotification({
-        appraisalId: next.id,
-        managerUserId,
-        employeeName: next.employeeName,
-      });
-      /* Also notify HR that KPIs were submitted for this cycle. */
-      if (managerUserId !== DEMO_HR.id) {
+      if (next.reviewingManagerId) {
+        await addReviewPendingNotification({
+          appraisalId: next.id,
+          managerUserId: next.reviewingManagerId,
+          employeeName: next.employeeName,
+        });
+      }
+      /* Also notify HR that KPIs were submitted for this cycle - only a
+         meaningful target for the demo roster's single fixed HR inbox.
+         Real HR has full org-wide visibility via the Super Admin list
+         already; there's no single "the HR account" to notify among
+         however many real HR employees exist. */
+      if (
+        isDemoOwner(next.ownerUserId) &&
+        next.reviewingManagerId !== DEMO_HR.id
+      ) {
         await addReviewPendingNotification({
           appraisalId: next.id,
           managerUserId: DEMO_HR.id,
@@ -626,10 +650,10 @@ export async function PATCH(
         { status: 409 }
       );
     }
-    if (action === "employee_annual_submit") {
+    if (action === "employee_annual_submit" && next.reviewingManagerId) {
       await addReviewPendingNotification({
         appraisalId: next.id,
-        managerUserId: next.reviewingManagerId ?? DEMO_MANAGER.id,
+        managerUserId: next.reviewingManagerId,
         employeeName: next.employeeName,
       });
       // Third employee-side ERPNext wiring slice: mirror the employee's
