@@ -183,21 +183,26 @@ export function AdminSettingsPanel() {
           <div className="flex items-center justify-between gap-4 border-b border-slate-100 px-5 py-4">
             <div className="min-w-0">
               <p className="text-sm font-medium text-navy-950">
-                Current cycle: {cycleSpanLabel(windows.currentCycleYear)}
+                Appraisal cycle
               </p>
               <p className="mt-0.5 text-xs leading-relaxed text-slate-500">
-                Advance to the {cycleSpanLabel(windows.currentCycleYear + 1)}{" "}
-                cycle when this year&apos;s appraisals are done.
+                Pick the next cycle to advance to when this year&apos;s
+                appraisals are done.
               </p>
             </div>
-            <button
-              type="button"
+            <select
               disabled={cycleBusy}
-              onClick={() => setCycleConfirm(true)}
-              className="shrink-0 rounded-lg border border-navy-200 bg-white px-3.5 py-2 text-sm font-semibold text-navy-900 shadow-sm transition hover:border-navy-400 hover:bg-navy-50 disabled:cursor-not-allowed disabled:opacity-50"
+              value={cycleConfirm ? "next" : "current"}
+              onChange={(e) => setCycleConfirm(e.target.value === "next")}
+              className="shrink-0 rounded-lg border border-navy-200 bg-white px-3 py-2 text-sm font-semibold text-navy-900 shadow-sm transition hover:border-navy-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
-              Start {cycleSpanLabel(windows.currentCycleYear + 1)} cycle →
-            </button>
+              <option value="current">
+                Current cycle: {cycleSpanLabel(windows.currentCycleYear)}
+              </option>
+              <option value="next">
+                Start {cycleSpanLabel(windows.currentCycleYear + 1)} cycle →
+              </option>
+            </select>
           </div>
 
           <div className="border-b border-slate-100 bg-slate-50/60 px-5 py-3">
