@@ -36,6 +36,7 @@ import {
   type Actor,
 } from "./appraisal-repo";
 import {
+  kpisToErpGoalsFull,
   capabilityManagerRatingsToErp,
   capabilitySelfRatingsToErp,
   kpiManagerRatingsToErp,
@@ -90,6 +91,8 @@ export type WriteAction =
 
 export type WritePayload = {
   kpis?: KpiRow[];
+  /** Did the caller actually send KPI rows? See the hr_update branch. */
+  kpisProvided?: boolean;
   capabilities?: CapabilityRow[];
   employeeComments?: string;
   managerComments?: string;
@@ -211,7 +214,11 @@ export async function applyErpnextAction(
       // the admin override, and its whole purpose is to bypass the phase
       // gates. Deliberately the ONLY caller of hr_override_appraisal.
       const data: Record<string, unknown> = {};
-      if (payload.kpis) data.goals = kpisToErpGoals(kpis);
+      // Full replace: send EVERY field, or the ones omitted are erased. And
+      // only send goals at all when the caller actually supplied KPI
+      // content - an HR save that only touches a comment must not rewrite
+      // the KPI table as a side effect.
+      if (payload.kpisProvided) data.goals = kpisToErpGoalsFull(kpis);
       if (payload.employeeComments !== undefined) {
         data.aemg_employee_comments = payload.employeeComments;
       }

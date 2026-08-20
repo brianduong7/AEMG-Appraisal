@@ -434,6 +434,7 @@ export async function PATCH(
     try {
       const next = await applyErpnextAction(actor, id, action as WriteAction, {
         kpis: kpisForWrite,
+        kpisProvided: Array.isArray(d.kpis) || Array.isArray(rootKpis),
         capabilities: mergedCaps,
         employeeComments:
           typeof d.employeeComments === "string" ? d.employeeComments : undefined,

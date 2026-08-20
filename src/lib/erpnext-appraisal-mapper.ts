@@ -253,6 +253,29 @@ export function appraisalFromErpnext(doc: ErpAppraisal): Appraisal {
   };
 }
 
+/**
+ * KPI rows for hr_override_appraisal, which FULL-REPLACES the goals table.
+ *
+ * Separate from kpisToErpGoals deliberately. That one sends only the three
+ * fields an employee owns at KPI time, which is right for update_kpis - but
+ * handing the same payload to the HR override erases every rating and
+ * comment on the record, because whatever is absent from a full replace is
+ * gone. That is not hypothetical: it happened during the end-to-end run and
+ * wiped a completed appraisal's scores.
+ */
+export function kpisToErpGoalsFull(kpis: KpiRow[]): Record<string, unknown>[] {
+  return kpis.map((k) => ({
+    kra: k.goalsAndKpis,
+    per_weightage: Number(k.weightPercent) || 0,
+    aemg_due_date: k.dueDate || null,
+    aemg_self_score: k.selfRating,
+    score: k.managerRating,
+    aemg_manager_comment: k.managerComments ?? "",
+    aemg_mid_year_rating: midYearRatingToErp(k.midYearRating),
+    aemg_mid_year_comment: k.midYearComment ?? "",
+  }));
+}
+
 /** KPI rows -> the `goals` payload `update_kpis` expects. */
 export function kpisToErpGoals(
   kpis: KpiRow[]
