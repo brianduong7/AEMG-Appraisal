@@ -1,11 +1,53 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { createAppraisal, readAppraisals } from "@/lib/appraisal-store";
+import { createAppraisal } from "@/lib/appraisal-store";
+import { resolveActor } from "@/lib/appraisal-actor";
+import { listForActor, readsFromErpnext } from "@/lib/appraisal-source";
+import type { AppraisalScope } from "@/lib/appraisal-repo";
 import { DEMO_COMPANY_NAME, findMockUser } from "@/lib/mock-users";
 
-export async function GET() {
-  const appraisals = await readAppraisals();
-  return NextResponse.json(appraisals);
+/** The nav's view names, as ERPNext scopes. */
+function scopeFor(view: string | null): AppraisalScope {
+  if (view === "team") return "team";
+  if (view === "admin") return "org";
+  return "self";
+}
+
+/**
+ * List the appraisals this caller may see.
+ *
+ * This used to return EVERY appraisal in the store to anyone who asked and
+ * let the client filter for display. With demo seed data that was untidy;
+ * with ERPNext behind it, it would hand the whole company's appraisals to
+ * any signed-in employee. The scope now travels with the request and is
+ * enforced server-side in ERPNext against the acting identity, so a caller
+ * asking for a scope they do not hold is refused rather than quietly given
+ * a narrower list they might present as complete.
+ *
+ * `as` names a demo login and is honoured only where demo logins are
+ * enabled (dev); production ignores it entirely.
+ */
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
+  const actor = await resolveActor(searchParams.get("as"));
+  const scope = scopeFor(searchParams.get("view"));
+
+  if (readsFromErpnext() && !actor) {
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  }
+
+  try {
+    const appraisals = await listForActor(actor, scope, {
+      includeChildren: true,
+    });
+    return NextResponse.json(appraisals);
+  } catch (e) {
+    // Under ERPNext this is a real outage or a refused scope, not something
+    // to paper over with an empty list - an empty list reads as "you have no
+    // appraisals", which is a different and much more alarming statement.
+    const msg = e instanceof Error ? e.message : "Could not load appraisals.";
+    return NextResponse.json({ error: msg }, { status: 502 });
+  }
 }
 
 /**

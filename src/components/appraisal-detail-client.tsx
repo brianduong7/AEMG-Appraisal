@@ -145,9 +145,21 @@ export function AppraisalDetailClient({
   id: string;
   initialAppraisal: Appraisal | null;
 }) {
-  const { user, mode } = useSession();
+  const { user, mode, isSso, managerProfile, hrProfile } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
+  /**
+   * Demo logins have no server session, so the request must name which demo
+   * account it is for the server to scope it. Real SSO carries identity in a
+   * cookie and ignores this; production ignores it outright, demo logins
+   * being disabled there.
+   */
+  const demoActorId = useMemo(() => {
+    if (isSso) return null;
+    if (mode === "manager") return managerProfile?.id ?? null;
+    if (mode === "hr") return hrProfile?.id ?? null;
+    return user?.id ?? null;
+  }, [isSso, mode, managerProfile, hrProfile, user]);
   const [appraisal, setAppraisal] = useState<Appraisal | null>(
     initialAppraisal
   );
@@ -173,7 +185,10 @@ export function AppraisalDetailClient({
 
     (async () => {
       try {
-        const res = await fetch(`/api/appraisals/${id}`, { cache: "no-store" });
+        const res = await fetch(
+          `/api/appraisals/${id}${demoActorId ? `?as=${encodeURIComponent(demoActorId)}` : ""}`,
+          { cache: "no-store" }
+        );
         if (!cancelled && res.ok) {
           const data = (await res.json()) as Appraisal;
           setAppraisal(data);
@@ -207,7 +222,10 @@ export function AppraisalDetailClient({
     return () => {
       cancelled = true;
     };
-  }, [id, initialAppraisal]);
+    // demoActorId matters: on a demo login the session restores async, so the
+    // first run can fire before it is known. Without it in the deps the fetch
+    // would stay unscoped and 401 under the ERPNext backend.
+  }, [id, initialAppraisal, demoActorId]);
 
   if (!mode || (mode === "employee" && !user)) {
     return (

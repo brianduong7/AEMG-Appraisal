@@ -11,6 +11,13 @@ import {
   removeNotificationsForAppraisal,
 } from "@/lib/notification-store";
 import { getReviewWindows } from "@/lib/settings-store";
+import { resolveActor } from "@/lib/appraisal-actor";
+import {
+  getById,
+  readsFromErpnext,
+  writesToErpnext,
+} from "@/lib/appraisal-source";
+import { erpnextApiCall } from "@/lib/erpnext";
 import {
   mirrorKpiApproveToErpnext,
   mirrorMidYearCompleteToErpnext,
@@ -275,15 +282,26 @@ const HR_CYCLE_STATUS_OPTIONS: CycleStatus[] = [
 ];
 
 export async function GET(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
-  const appraisal = await getAppraisal(id);
-  if (!appraisal) {
-    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  const { searchParams } = new URL(request.url);
+  const actor = await resolveActor(searchParams.get("as"));
+
+  if (readsFromErpnext() && !actor) {
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
   }
-  return NextResponse.json(appraisal);
+  try {
+    const appraisal = await getById(actor, id);
+    if (!appraisal) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+    return NextResponse.json(appraisal);
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Could not load appraisal.";
+    return NextResponse.json({ error: msg }, { status: 502 });
+  }
 }
 
 /**
@@ -294,10 +312,33 @@ export async function GET(
  * the client gates this behind a confirmation dialog before ever calling it.
  */
 export async function DELETE(
-  _request: Request,
+  request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
   const { id } = await params;
+  const { searchParams } = new URL(request.url);
+  const actor = await resolveActor(searchParams.get("as"));
+
+  if (writesToErpnext()) {
+    // ERPNext enforces HR-only itself, against the acting identity - the
+    // client-side `caps.canSuperAdmin` gate that used to be the ONLY check
+    // is now a UI convenience rather than the authorization.
+    if (!actor) {
+      return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+    }
+    const result = await erpnextApiCall(
+      "appraisal.delete_appraisal",
+      { appraisal: id },
+      undefined,
+      actor.employee
+    );
+    if (!result.ok) {
+      return NextResponse.json({ error: result.error }, { status: 400 });
+    }
+    await removeNotificationsForAppraisal(id);
+    return NextResponse.json({ ok: true });
+  }
+
   const removed = await deleteAppraisal(id);
   if (!removed) {
     return NextResponse.json({ error: "Not found" }, { status: 404 });

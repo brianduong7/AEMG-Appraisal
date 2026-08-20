@@ -99,7 +99,7 @@ type ManagerNotification = {
 
 export function HomeContent() {
   const router = useRouter();
-  const { user, mode, managerProfile, hrProfile } = useSession();
+  const { user, mode, managerProfile, hrProfile, isSso } = useSession();
   const brandColor = entityBrandColor(user?.entity);
   const { setRole } = useRole();
   const searchParams = useSearchParams();
@@ -167,12 +167,33 @@ export function HomeContent() {
     };
   }, []);
 
+  /**
+   * Demo logins have no server session, so the request has to name which
+   * demo account it is for the server to scope it. Real SSO sessions carry
+   * their identity in a cookie and ignore this entirely; production ignores
+   * it regardless, since demo logins are disabled there.
+   */
+  const demoActorId = useMemo(() => {
+    if (isSso) return null;
+    if (mode === "manager") return managerProfile?.id ?? null;
+    if (mode === "hr") return hrProfile?.id ?? null;
+    return user?.id ?? null;
+  }, [isSso, mode, managerProfile, hrProfile, user]);
+
   const refreshList = useCallback(async () => {
-    const res = await fetch("/api/appraisals");
-    if (!res.ok) throw new Error("Failed to load");
+    // `view` becomes the server-side scope. Sending it means ERPNext returns
+    // only what this caller may see, rather than the whole org filtered down
+    // in the browser afterwards.
+    const qs = new URLSearchParams({ view: appraisalView });
+    if (demoActorId) qs.set("as", demoActorId);
+    const res = await fetch(`/api/appraisals?${qs.toString()}`);
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(body.error || "Failed to load");
+    }
     const data = (await res.json()) as Appraisal[];
     setList(data);
-  }, []);
+  }, [appraisalView, demoActorId]);
 
   const refreshNotifications = useCallback(async () => {
     if (mode !== "manager" || !managerProfile) {
