@@ -79,3 +79,15 @@ export async function hasOtherActive(
     excludeId,
   });
 }
+
+/**
+ * HTTP status for an error out of the read/write layer.
+ *
+ * Everything used to become 502, which told a user their appraisal system
+ * was broken when in fact they had simply asked for something not theirs.
+ */
+export function statusForError(e: unknown): number {
+  if (e instanceof erp.ErpnextForbiddenError) return 403;
+  if (e instanceof erp.ErpnextNotFoundError) return 404;
+  return 502;
+}

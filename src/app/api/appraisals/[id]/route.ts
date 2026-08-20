@@ -15,6 +15,7 @@ import { resolveActor } from "@/lib/appraisal-actor";
 import {
   getById,
   readsFromErpnext,
+  statusForError,
   writesToErpnext,
 } from "@/lib/appraisal-source";
 import { erpnextApiCall } from "@/lib/erpnext";
@@ -300,7 +301,7 @@ export async function GET(
     return NextResponse.json(appraisal);
   } catch (e) {
     const msg = e instanceof Error ? e.message : "Could not load appraisal.";
-    return NextResponse.json({ error: msg }, { status: 502 });
+    return NextResponse.json({ error: msg }, { status: statusForError(e) });
   }
 }
 

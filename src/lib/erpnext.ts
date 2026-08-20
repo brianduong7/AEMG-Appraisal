@@ -152,7 +152,19 @@ function ownerAuthHeader(ownerUserId: string): string | null {
 
 export type ErpnextResult<T> =
   | { ok: true; data: T }
-  | { ok: false; error: string };
+  | {
+      ok: false;
+      error: string;
+      /**
+       * The Frappe exception class, e.g. "PermissionError" or
+       * "DoesNotExistError". Optional and additive - the mirrors ignore it,
+       * but once ERPNext is the store the caller has to tell a refusal
+       * ("you may not see this") apart from an outage ("we could not ask"),
+       * because those are completely different things to show a user and
+       * map to different HTTP statuses.
+       */
+      kind?: string;
+    };
 
 /**
  * POST to any whitelisted `aemg_epm_frappe.api.*` method, by its dotted
@@ -200,15 +212,27 @@ export async function erpnextApiCall<T = Record<string, unknown>>(
     const body = (await res.json().catch(() => ({}))) as {
       message?: T;
       exception?: string;
+      /** Frappe sends the class here directly, and it is the reliable
+       *  source: on a bare `frappe.throw(msg, SomeError)` the `exception`
+       *  string comes back EMPTY, so parsing that alone silently loses the
+       *  kind and every refusal/404 degrades to a generic 502. */
+      exc_type?: string;
     };
     if (!res.ok || body.message == null) {
-      const error = erpnextExceptionMessage(body.exception) ?? `ERPNext returned ${res.status}.`;
+      const error =
+        erpnextExceptionMessage(body.exception) ??
+        serverMessage(body) ??
+        `ERPNext returned ${res.status}.`;
       console.error(
         `[erpnext] ${dottedMethod} failed:`,
         res.status,
         body.exception ?? body
       );
-      return { ok: false, error };
+      return {
+        ok: false,
+        error,
+        kind: body.exc_type || erpnextExceptionKind(body.exception),
+      };
     }
     return { ok: true, data: body.message };
   } catch (e) {
@@ -225,6 +249,34 @@ export async function erpnextApiCall<T = Record<string, unknown>>(
  * caller falls back to a generic message rather than surfacing a bare
  * Python traceback class to a user.
  */
+/**
+ * Frappe puts the user-facing text of a `frappe.throw` in `_server_messages`
+ * (a JSON-encoded array of JSON strings) when `exception` is empty. Without
+ * this, those errors surfaced as a bare "ERPNext returned 404." instead of
+ * the message the add-on actually raised.
+ */
+function serverMessage(body: unknown): string | null {
+  const raw = (body as { _server_messages?: string })?._server_messages;
+  if (!raw) return null;
+  try {
+    const arr = JSON.parse(raw) as string[];
+    for (const item of arr) {
+      const parsed = JSON.parse(item) as { message?: string };
+      if (parsed?.message) return String(parsed.message);
+    }
+  } catch {
+    /* not the shape we expected - fall through to the generic message */
+  }
+  return null;
+}
+
+function erpnextExceptionKind(exception: string | undefined): string | undefined {
+  if (!exception) return undefined;
+  // "frappe.exceptions.PermissionError: ..." -> "PermissionError"
+  const m = exception.match(/([A-Za-z]+Error)\s*:/);
+  return m?.[1];
+}
+
 function erpnextExceptionMessage(exception: string | undefined): string | null {
   if (!exception) return null;
   const idx = exception.lastIndexOf(": ");

@@ -15,6 +15,7 @@ import {
 import { DEMO_HR } from "@/lib/mock-users";
 import { useRole } from "@/contexts/role-context";
 import { useSession } from "@/contexts/session-context";
+import { appraisalReference } from "@/lib/appraisal-reference";
 import { saveAppraisalBootstrap } from "@/lib/appraisal-bootstrap";
 import { AppShell } from "@/components/app-shell";
 import { AdminSettingsPanel } from "@/components/admin-settings-content";
@@ -80,14 +81,9 @@ function erpAppraisalCycleLabel(year: number) {
   return `${year}-${year + 1} Annual Appraisal`;
 }
 
-/** Stable HR-APR-* id from record id (order-independent). */
+/** See appraisal-reference.ts - real ERPNext reference when we have one. */
 function erpAppraisalDocId(year: number, recordId: string) {
-  let h = 0;
-  for (let i = 0; i < recordId.length; i++) {
-    h = (Math.imul(31, h) + recordId.charCodeAt(i)) >>> 0;
-  }
-  const seq = (h % 99_998) + 1;
-  return `HR-APR-${year}-${String(seq).padStart(5, "0")}`;
+  return appraisalReference(recordId, year);
 }
 
 type ManagerNotification = {

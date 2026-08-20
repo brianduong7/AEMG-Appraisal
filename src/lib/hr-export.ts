@@ -1,3 +1,4 @@
+import { appraisalReference } from "./appraisal-reference";
 import type { Appraisal } from "./types";
 import {
   CYCLE_STATUS_LABELS,
@@ -85,12 +86,7 @@ export function downloadHrAppraisalReport(
   ];
 
   const rows = appraisals.map((a) => {
-    let h = 0;
-    for (let i = 0; i < a.id.length; i++) {
-      h = (Math.imul(31, h) + a.id.charCodeAt(i)) >>> 0;
-    }
-    const seq = (h % 99_998) + 1;
-    const reference = `HR-APR-${a.cycleYear}-${String(seq).padStart(5, "0")}`;
+    const reference = appraisalReference(a.id, a.cycleYear);
 
     const mgr = formatOverall(appraisalOverallScore(a));
     const self = formatOverall(appraisalSelfOverallScore(a));

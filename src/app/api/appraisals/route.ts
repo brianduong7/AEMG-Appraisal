@@ -2,7 +2,11 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { createAppraisal } from "@/lib/appraisal-store";
 import { resolveActor } from "@/lib/appraisal-actor";
-import { listForActor, readsFromErpnext } from "@/lib/appraisal-source";
+import {
+  listForActor,
+  readsFromErpnext,
+  statusForError,
+} from "@/lib/appraisal-source";
 import type { AppraisalScope } from "@/lib/appraisal-repo";
 import { DEMO_COMPANY_NAME, findMockUser } from "@/lib/mock-users";
 
@@ -46,7 +50,7 @@ export async function GET(request: Request) {
     // to paper over with an empty list - an empty list reads as "you have no
     // appraisals", which is a different and much more alarming statement.
     const msg = e instanceof Error ? e.message : "Could not load appraisals.";
-    return NextResponse.json({ error: msg }, { status: 502 });
+    return NextResponse.json({ error: msg }, { status: statusForError(e) });
   }
 }
 

@@ -49,6 +49,22 @@ export class ErpnextUnavailableError extends Error {
   }
 }
 
+/** ERPNext refused this on authorization grounds - not an outage. */
+export class ErpnextForbiddenError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ErpnextForbiddenError";
+  }
+}
+
+/** The record does not exist - an expected answer, not a failure. */
+export class ErpnextNotFoundError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ErpnextNotFoundError";
+  }
+}
+
 async function call<T>(
   method: string,
   payload: Record<string, unknown>,
@@ -61,6 +77,16 @@ async function call<T>(
     actor?.employee
   );
   if (!result.ok) {
+    // A refusal and an outage look the same to a caller that only has a
+    // string, and they are not the same thing at all: one is "you may not
+    // see this", the other is "we could not ask". Collapsing them would
+    // show an alarming infrastructure error for a routine permission check.
+    if (result.kind === "PermissionError") {
+      throw new ErpnextForbiddenError(result.error);
+    }
+    if (result.kind === "DoesNotExistError") {
+      throw new ErpnextNotFoundError(result.error);
+    }
     throw new ErpnextUnavailableError(result.error);
   }
   return result.data;
@@ -106,6 +132,7 @@ export async function getAppraisal(
     // A missing appraisal is an expected answer ("this id is not a thing"),
     // not an outage - keep those distinguishable so a 404 never reads as
     // "ERPNext is down" and vice versa.
+    if (e instanceof ErpnextNotFoundError) return null;
     if (e instanceof ErpnextUnavailableError && /not found/i.test(e.message)) {
       return null;
     }
