@@ -26,7 +26,7 @@ export function RatingSelect({
     <div className={`flex flex-wrap items-center gap-2 ${className ?? ""}`}>
       <select
         id={id}
-        className="w-full min-w-40 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-navy-950 shadow-sm outline-none transition focus:border-navy-500 focus:ring-2 focus:ring-navy-500/15"
+        className="w-full min-w-40 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-sm text-navy-950 shadow-sm outline-none transition focus:border-navy-500 focus:ring-2 focus:ring-navy-500/15 disabled:cursor-not-allowed disabled:border-slate-200/80 disabled:bg-zinc-100 disabled:text-zinc-500 disabled:shadow-none"
         value={selectValue}
         disabled={disabled}
         onChange={(e) => {

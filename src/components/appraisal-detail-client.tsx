@@ -1036,7 +1036,11 @@ function AppraisalDetailInner({
       : computedManagerOverallLabel;
 
   const inputEnterprise =
-    "w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-black shadow-sm outline-none transition focus:border-zinc-400 focus:ring-2 focus:ring-zinc-200";
+    "w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-black shadow-sm outline-none transition focus:border-zinc-400 focus:ring-2 focus:ring-zinc-200 " +
+    // A disabled field must LOOK disabled. HR Admin renders the whole form
+    // read-only until Edit is clicked, and with default styling that reads as
+    // an editable form that silently swallows every keystroke.
+    "disabled:cursor-not-allowed disabled:border-zinc-200/80 disabled:bg-zinc-100 disabled:text-zinc-500 disabled:shadow-none disabled:resize-none";
 
   const identity = useMemo(() => {
     const fallback = {
@@ -2459,7 +2463,19 @@ function AppraisalDetailInner({
                         rules.
                       </p>
                       {!hrEditing && (
-                        <p className="mt-2 text-xs font-medium text-amber-700">
+                        <p className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800">
+                          <svg
+                            viewBox="0 0 20 20"
+                            fill="currentColor"
+                            aria-hidden="true"
+                            className="h-3.5 w-3.5"
+                          >
+                            <path
+                              fillRule="evenodd"
+                              d="M10 1a4 4 0 0 0-4 4v3H5.5A1.5 1.5 0 0 0 4 9.5v7A1.5 1.5 0 0 0 5.5 18h9a1.5 1.5 0 0 0 1.5-1.5v-7A1.5 1.5 0 0 0 14.5 8H14V5a4 4 0 0 0-4-4Zm2.5 7h-5V5a2.5 2.5 0 0 1 5 0v3Z"
+                              clipRule="evenodd"
+                            />
+                          </svg>
                           Viewing only. Click Edit to make changes.
                         </p>
                       )}
