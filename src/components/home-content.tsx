@@ -16,6 +16,7 @@ import { DEMO_HR } from "@/lib/mock-users";
 import { useRole } from "@/contexts/role-context";
 import { useSession } from "@/contexts/session-context";
 import { appraisalReference } from "@/lib/appraisal-reference";
+import { serverScopesAppraisals } from "@/lib/backend-mode-client";
 import { saveAppraisalBootstrap } from "@/lib/appraisal-bootstrap";
 import { AppShell } from "@/components/app-shell";
 import { AdminSettingsPanel } from "@/components/admin-settings-content";
@@ -297,7 +298,8 @@ export function HomeContent() {
       appraisalView,
       mode,
       user,
-      teamOwnerId
+      teamOwnerId,
+      serverScopesAppraisals()
     );
     if (!employeeFilterId) return scoped;
     return scoped.filter((a) => a.ownerUserId === employeeFilterId);
@@ -327,7 +329,8 @@ export function HomeContent() {
       appraisalView,
       mode,
       user,
-      teamOwnerId
+      teamOwnerId,
+      serverScopesAppraisals()
     );
     const byOwner = new Map<string, string>();
     for (const a of scoped) {

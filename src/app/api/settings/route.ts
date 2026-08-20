@@ -1,13 +1,11 @@
 import { NextResponse } from "next/server";
-import {
-  getReviewWindows,
-  startNewCycle,
-  updateReviewWindows,
-} from "@/lib/settings-store";
+import { advanceCycle, getWindows, setWindows } from "@/lib/settings-source";
+import { resolveActor } from "@/lib/appraisal-actor";
+import { statusForError, writesToErpnext } from "@/lib/appraisal-source";
 import type { ReviewWindowSettings } from "@/lib/types";
 
 export async function GET() {
-  const settings = await getReviewWindows();
+  const settings = await getWindows();
   return NextResponse.json(settings);
 }
 
@@ -25,9 +23,23 @@ export async function PATCH(request: Request) {
 
   /* Cycle advancement is a distinct, deliberate action - not a raw field
      patch (that would let a client set currentCycleYear to anything). */
+  // HR-only, enforced by ERPNext against the acting identity. The route
+  // previously had no check at all - the Admin Settings page simply is not
+  // rendered for non-HR, which is a UI convenience, not authorization.
+  const actor = await resolveActor(
+    new URL(request.url).searchParams.get("as")
+  );
+  if (writesToErpnext() && !actor) {
+    return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+  }
+
   if (o.startNextCycle === true) {
-    const next = await startNewCycle();
-    return NextResponse.json(next);
+    try {
+      return NextResponse.json(await advanceCycle(actor));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Could not start the cycle.";
+      return NextResponse.json({ error: msg }, { status: statusForError(e) });
+    }
   }
 
   const patch: Partial<ReviewWindowSettings> = {};
@@ -46,6 +58,10 @@ export async function PATCH(request: Request) {
       { status: 400 }
     );
   }
-  const next = await updateReviewWindows(patch);
-  return NextResponse.json(next);
+  try {
+    return NextResponse.json(await setWindows(actor, patch));
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : "Could not update windows.";
+    return NextResponse.json({ error: msg }, { status: statusForError(e) });
+  }
 }

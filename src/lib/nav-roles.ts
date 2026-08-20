@@ -108,10 +108,24 @@ export function filterAppraisalsForView(
   view: AppraisalNavView,
   mode: SessionModeLike | null,
   user: MockUser | null,
-  managerId: string | null
+  managerId: string | null,
+  /**
+   * True when the server already scoped this list to the caller.
+   *
+   * With ERPNext as the store the scope is enforced there, against the
+   * acting identity, and the list arrives already correct. Re-filtering it
+   * here does not just duplicate that work - it BREAKS it, because this
+   * function compares demo roster ids ("mark") against records that now
+   * carry real ERPNext employee ids ("HR-EMP-00002"), matches nothing, and
+   * shows a manager an empty team. Trust the server when it has scoped.
+   */
+  serverScoped = false
 ): Appraisal[] {
   if (view === "settings") {
     return [];
+  }
+  if (serverScoped) {
+    return list;
   }
   if (view === "admin") {
     /* Super Admin: free open access — all records. */
