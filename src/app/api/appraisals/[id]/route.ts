@@ -20,6 +20,10 @@ import {
 } from "@/lib/appraisal-source";
 import { erpnextApiCall } from "@/lib/erpnext";
 import {
+  applyErpnextAction,
+  type WriteAction,
+} from "@/lib/appraisal-writer";
+import {
   mirrorKpiApproveToErpnext,
   mirrorMidYearCompleteToErpnext,
   mirrorAnnualManagerSubmitToErpnext,
@@ -45,6 +49,11 @@ import {
   MID_YEAR_RATING_OPTIONS,
 } from "@/lib/types";
 import { sumKpiWeights } from "@/lib/kpi-utils";
+import {
+  employeeAnnualSubmitValidationError,
+  employeeKpiSubmitValidationError,
+  employeeMidYearSubmitValidationError,
+} from "@/lib/appraisal-validation";
 
 function parseOptionalRating(raw: unknown): number | null {
   if (raw == null || raw === "") return null;
@@ -68,54 +77,6 @@ function parseOptionalRating(raw: unknown): number | null {
  */
 function isDemoOwner(ownerUserId: string): boolean {
   return findMockUser(ownerUserId) != null;
-}
-
-/** Initial KPI lock — weights and KPI text only; no self-ratings yet. */
-function employeeKpiSubmitValidationError(kpis: KpiRow[]): string | null {
-  if (kpis.length < MIN_KPIS) {
-    return `Add at least ${MIN_KPIS} KPIs before submitting.`;
-  }
-  if (kpis.length > MAX_KPIS) {
-    return `Maximum ${MAX_KPIS} KPIs.`;
-  }
-  for (const k of kpis) {
-    if ((Number(k.weightPercent) || 0) <= 0) {
-      return "Each KPI must have a weight greater than 0%.";
-    }
-  }
-  const total = sumKpiWeights(kpis);
-  if (Math.abs(total - 100) >= 0.01) {
-    return "KPI weights must total exactly 100% before submitting.";
-  }
-  return null;
-}
-
-function employeeAnnualSubmitValidationError(
-  kpis: KpiRow[],
-  capabilities: CapabilityRow[]
-): string | null {
-  for (const k of kpis) {
-    if (k.selfRating == null) {
-      return "Select a self rating for every KPI before submitting.";
-    }
-  }
-  for (const c of capabilities) {
-    if (c.selfRating == null) {
-      return "Select a self rating for every capability before submitting.";
-    }
-  }
-  return null;
-}
-
-function employeeMidYearSubmitValidationError(
-  lines: { midYearRating: MidYearRating | null }[]
-): string | null {
-  for (const l of lines) {
-    if (l.midYearRating == null) {
-      return "Select On Track / Not on Track for every KPI before submitting your mid-year review.";
-    }
-  }
-  return null;
 }
 
 type EmployeePayload = Pick<
@@ -366,6 +327,151 @@ export async function PATCH(
 
   const action = (body as { action?: string }).action;
   const data = (body as { data?: unknown }).data;
+
+  /**
+   * ERPNext write path.
+   *
+   * Handled before the local branches rather than woven through them: the
+   * local path stays byte-for-byte intact so unsetting the flag is a true
+   * rollback, and the two never half-run against each other.
+   *
+   * Payload shapes differ per action - some carry rows on `data`, some on
+   * the body root - so each is normalised into one WritePayload here rather
+   * than teaching the writer about the wire format.
+   */
+  if (writesToErpnext()) {
+    const { searchParams } = new URL(request.url);
+    const actor = await resolveActor(searchParams.get("as"));
+    if (!actor) {
+      return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+    }
+
+    const current = await getById(actor, id).catch(() => null);
+    if (!current) {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
+    const d = (data ?? {}) as Record<string, unknown>;
+    const rootKpis = (body as { kpis?: unknown }).kpis;
+    const rootCaps = (body as { capabilities?: unknown }).capabilities;
+
+    /* Row payloads are matched POSITIONALLY by ERPNext, so they are merged
+       onto the stored rows rather than used as-is - a client sending a
+       partial or reordered list would otherwise write onto the wrong KPI. */
+    const mergedKpis: KpiRow[] = current.kpis.map((k, i) => {
+      const fromData = Array.isArray(d.kpis) ? (d.kpis[i] as Record<string, unknown>) : undefined;
+      const fromRoot = Array.isArray(rootKpis) ? (rootKpis[i] as Record<string, unknown>) : undefined;
+      const row = { ...(fromData ?? {}), ...(fromRoot ?? {}) };
+      return {
+        ...k,
+        goalsAndKpis: typeof row.goalsAndKpis === "string" ? row.goalsAndKpis : k.goalsAndKpis,
+        weightPercent:
+          row.weightPercent !== undefined ? Number(row.weightPercent) || 0 : k.weightPercent,
+        dueDate: typeof row.dueDate === "string" ? row.dueDate : k.dueDate,
+        selfRating:
+          "selfRating" in row ? parseOptionalRating(row.selfRating) : k.selfRating,
+        managerRating:
+          "managerRating" in row ? parseOptionalRating(row.managerRating) : k.managerRating,
+        managerComments:
+          typeof row.managerComments === "string" ? row.managerComments : k.managerComments,
+        midYearRating:
+          "midYearRating" in row ? parseMidYearRating(row.midYearRating) : k.midYearRating,
+        midYearComment:
+          typeof row.midYearComment === "string" ? row.midYearComment : k.midYearComment,
+      };
+    });
+
+    /* A brand-new appraisal has no stored rows yet, so the employee's first
+       save has to be able to ADD them, not just merge onto nothing. */
+    const kpisForWrite =
+      (action === "employee_save" || action === "employee_submit") && Array.isArray(d.kpis)
+        ? (d.kpis as Record<string, unknown>[]).slice(0, MAX_KPIS).map((row, i) => ({
+            ...(current.kpis[i] ?? {
+              selfRating: null,
+              managerRating: null,
+              managerComments: "",
+              midYearRating: null,
+              midYearComment: "",
+            }),
+            goalsAndKpis: String(row.goalsAndKpis ?? ""),
+            weightPercent: Math.min(100, Math.max(0, Number(row.weightPercent) || 0)),
+            dueDate: String(row.dueDate ?? ""),
+          })) as KpiRow[]
+        : mergedKpis;
+
+    const capsSource = Array.isArray(d.capabilities)
+      ? (d.capabilities as Record<string, unknown>[])
+      : Array.isArray(rootCaps)
+        ? (rootCaps as Record<string, unknown>[])
+        : null;
+    const mergedCaps: CapabilityRow[] = current.capabilities.map((c) => {
+      const row = capsSource?.find((r) => r?.id === c.id);
+      if (!row) return c;
+      return {
+        ...c,
+        selfRating: "selfRating" in row ? parseOptionalRating(row.selfRating) : c.selfRating,
+        managerRating:
+          "managerRating" in row ? parseOptionalRating(row.managerRating) : c.managerRating,
+        managerComments:
+          typeof row.managerComments === "string" ? row.managerComments : c.managerComments,
+      };
+    });
+
+    // Same friendly submit-time messages as the local path.
+    if (action === "employee_submit") {
+      const err = employeeKpiSubmitValidationError(kpisForWrite);
+      if (err) return NextResponse.json({ error: err }, { status: 400 });
+    }
+    if (action === "employee_annual_submit") {
+      const err = employeeAnnualSubmitValidationError(mergedKpis, mergedCaps);
+      if (err) return NextResponse.json({ error: err }, { status: 400 });
+    }
+    if (action === "employee_midyear_submit") {
+      const err = employeeMidYearSubmitValidationError(mergedKpis);
+      if (err) return NextResponse.json({ error: err }, { status: 400 });
+    }
+
+    try {
+      const next = await applyErpnextAction(actor, id, action as WriteAction, {
+        kpis: kpisForWrite,
+        capabilities: mergedCaps,
+        employeeComments:
+          typeof d.employeeComments === "string" ? d.employeeComments : undefined,
+        managerComments:
+          typeof (body as { managerComments?: unknown }).managerComments === "string"
+            ? String((body as { managerComments?: unknown }).managerComments)
+            : typeof d.managerComments === "string"
+              ? d.managerComments
+              : undefined,
+        midYearManagerComments:
+          typeof (body as { midYearManagerComments?: unknown }).midYearManagerComments ===
+          "string"
+            ? String((body as { midYearManagerComments?: unknown }).midYearManagerComments)
+            : typeof d.midYearManagerComments === "string"
+              ? d.midYearManagerComments
+              : undefined,
+        managerOverallOverride: parseOptionalRating(
+          (body as { managerOverallOverride?: unknown }).managerOverallOverride ??
+            d.managerOverallOverride
+        ),
+      });
+
+      if (action === "employee_submit" && next.reviewingManagerId) {
+        await addReviewPendingNotification({
+          appraisalId: next.id,
+          managerUserId: next.reviewingManagerId,
+          employeeName: next.employeeName,
+        });
+      }
+      if (action === "manager_kpi_approve" || action === "manager_submit") {
+        await removeNotificationsForAppraisal(id);
+      }
+      return NextResponse.json(next);
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Update failed.";
+      return NextResponse.json({ error: msg }, { status: statusForError(e) });
+    }
+  }
 
   if (action === "employee_save" || action === "employee_submit") {
     if (!isEmployeePayload(data)) {

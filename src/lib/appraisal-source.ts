@@ -89,5 +89,10 @@ export async function hasOtherActive(
 export function statusForError(e: unknown): number {
   if (e instanceof erp.ErpnextForbiddenError) return 403;
   if (e instanceof erp.ErpnextNotFoundError) return 404;
+  // A phase-gate refusal ("KPI status must be 'Not Started' first") is the
+  // request arriving against a state that has moved on - the same thing the
+  // local path returned 409 for. Reporting it as 502 would tell the user
+  // ERPNext was broken when it was working exactly as designed.
+  if (e instanceof erp.ErpnextConflictError) return 409;
   return 502;
 }

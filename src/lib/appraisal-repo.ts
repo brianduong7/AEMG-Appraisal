@@ -57,6 +57,14 @@ export class ErpnextForbiddenError extends Error {
   }
 }
 
+/** A phase gate or validation rule refused this - the state moved on. */
+export class ErpnextConflictError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ErpnextConflictError";
+  }
+}
+
 /** The record does not exist - an expected answer, not a failure. */
 export class ErpnextNotFoundError extends Error {
   constructor(message: string) {
@@ -86,6 +94,9 @@ async function call<T>(
     }
     if (result.kind === "DoesNotExistError") {
       throw new ErpnextNotFoundError(result.error);
+    }
+    if (result.kind === "ValidationError") {
+      throw new ErpnextConflictError(result.error);
     }
     throw new ErpnextUnavailableError(result.error);
   }

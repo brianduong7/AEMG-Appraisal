@@ -6,7 +6,11 @@ import {
   listForActor,
   readsFromErpnext,
   statusForError,
+  writesToErpnext,
 } from "@/lib/appraisal-source";
+import { createErpnextAppraisal } from "@/lib/appraisal-writer";
+import { getAppraisal as getFromErpnext } from "@/lib/appraisal-repo";
+import { getReviewWindows } from "@/lib/settings-store";
 import type { AppraisalScope } from "@/lib/appraisal-repo";
 import { DEMO_COMPANY_NAME, findMockUser } from "@/lib/mock-users";
 
@@ -92,6 +96,36 @@ export async function POST(request: Request) {
 
   const session = await auth();
   const identity = session?.identity;
+
+  /**
+   * ERPNext create. The employment details are ERPNext's own - it reads them
+   * off the Employee record - so unlike the local path there is nothing to
+   * copy across from the session, and nothing a caller could spoof by
+   * posting a different job title or reporting line.
+   */
+  if (writesToErpnext()) {
+    const actor = await resolveActor(
+      new URL(request.url).searchParams.get("as") ?? ownerUserId
+    );
+    if (!actor) {
+      return NextResponse.json({ error: "Not signed in" }, { status: 401 });
+    }
+    try {
+      const windows = await getReviewWindows();
+      const name = await createErpnextAppraisal(actor, windows.currentCycleYear);
+      const created = await getFromErpnext(actor, name);
+      if (!created) {
+        return NextResponse.json(
+          { error: "Created, but could not read it back." },
+          { status: 502 }
+        );
+      }
+      return NextResponse.json(created, { status: 201 });
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : "Create failed";
+      return NextResponse.json({ error: msg }, { status: statusForError(e) });
+    }
+  }
 
   if (identity && identity.employee === ownerUserId) {
     try {
