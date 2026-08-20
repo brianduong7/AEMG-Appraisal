@@ -268,7 +268,8 @@ function AppraisalDetailInner({
    *  access to the admin tab's content is still gated by isHr further down. */
   initialTab: AppraisalTabId;
 }) {
-  const { user: sessionUser, mode, isSso, hrProfile } = useSession();
+  const { user: sessionUser, mode, isSso, hrProfile, managerProfile } =
+    useSession();
   const { role, setRole } = useRole();
   const brandColor = entityBrandColor(sessionUser?.entity);
 
@@ -289,17 +290,57 @@ function AppraisalDetailInner({
     mode === "hr" &&
     hrProfile != null &&
     appraisal.ownerUserId === hrProfile.id;
+  /**
+   * Same problem as viewingOwnAsHr above, for the manager side: a manager
+   * creating/working on THEIR OWN appraisal was stuck on the manager-review
+   * placeholder ("The employee has not submitted this appraisal yet...",
+   * no KPI form, no Save/Submit at all) instead of the normal employee
+   * create/submit flow - because `role` was unconditionally set to
+   * "manager" for anyone in manager mode, and the KPI draft state only
+   * populates when `role === "employee"`. Reported from a real prod SSO
+   * user (manager) whose Save/Submit KPIs appeared to do nothing; confirmed
+   * live with the demo Manager account before this fix. Mirrors
+   * viewingOwnAsHr exactly - `managerProfile.id` is the same "whichever
+   * manager account is actually signed in" signal.
+   */
+  const viewingOwnAsManager =
+    mode === "manager" &&
+    managerProfile != null &&
+    appraisal.ownerUserId === managerProfile.id;
+  /**
+   * The demo-roster substitution below exists ONLY because demo manager/HR
+   * logins have no `sessionUser` at all (session-context's loginManager/
+   * loginHr and restoreDemoSession both call `setUser(null)`), so an object
+   * is needed from somewhere to render the employee form.
+   *
+   * The order matters, and getting it backwards was a real production bug:
+   * `findMockUser(DEMO_HR.id)` ALWAYS succeeds ("hr" is in the demo roster),
+   * so putting it first swapped every REAL SSO manager/HR user for the demo
+   * account. Their `user.id` became "hr"/"mark" instead of their true
+   * ERPNext employee id, which then failed saveEmployee's ownership guard
+   * (`user.id !== appraisal.ownerUserId`) and returned silently - Save and
+   * Submit KPIs did nothing at all, with no error shown. Reported by real
+   * prod SSO users (Devin Serasinghe, Sam Sharma, FOIT Admin, all of whom
+   * hold ERPNext's HR User role and so land in HR mode); confirmed against
+   * prod, where their typed KPIs never left the browser.
+   *
+   * Real identity first, demo roster only as the fallback it was meant to be.
+   */
   const user = viewingOwnAsHr
-    ? (findMockUser(DEMO_HR.id) ?? sessionUser)
-    : sessionUser;
+    ? (sessionUser ?? findMockUser(DEMO_HR.id))
+    : viewingOwnAsManager
+      ? (sessionUser ?? findMockUser(DEMO_MANAGER.id))
+      : sessionUser;
 
   useEffect(() => {
     if (mode === "employee") setRole("employee");
-    if (mode === "manager") setRole("manager");
+    if (mode === "manager") {
+      setRole(viewingOwnAsManager ? "employee" : "manager");
+    }
     if (mode === "hr") {
       setRole(viewingOwnAsHr ? "employee" : "hr");
     }
-  }, [mode, setRole, viewingOwnAsHr]);
+  }, [mode, setRole, viewingOwnAsHr, viewingOwnAsManager]);
 
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -547,8 +588,21 @@ function AppraisalDetailInner({
   }, [managerKpiDraft, managerCapDraft]);
 
   async function saveEmployee(action: "employee_save" | "employee_submit") {
-    if (!draft || !user) return;
-    if (user.id !== appraisal.ownerUserId) return;
+    /* These two guards used to `return` silently. That is how the SSO
+       ownership bug above stayed invisible: the button did nothing, showed
+       nothing, and logged nothing, so it read as "the app is broken" rather
+       than pointing at the mismatch. Surface it instead - if this ever fires
+       again it should be reportable, not mysterious. */
+    if (!draft || !user) {
+      setFormError("Could not save: no active session. Try reloading the page.");
+      return;
+    }
+    if (user.id !== appraisal.ownerUserId) {
+      setFormError(
+        "Could not save: this appraisal belongs to a different account. Try reloading the page."
+      );
+      return;
+    }
     if (action === "employee_submit" && !employeeSubmitReady) {
       setFormError(
         `Add ${MIN_KPIS}–${MAX_KPIS} KPIs, set each weight above 0%, and total exactly 100% before submitting.`
